@@ -51,6 +51,25 @@ RISK_TASK = (
     "mention what would have to change for the score to drop. Do not suggest the score is a probability."
 )
 
+DECISION_MEMO_TASK = (
+    "Write a decision brief for a space project manager (about 250-350 words) from the facts. Structure: "
+    "1) a one-line headline with a recommendation level (monitor / prepare / act) justified by the numbers; "
+    "2) situation: the closest passes with miss distance, speed and time; "
+    "3) options: what an avoidance burn would cost (delta-v and propellant at different lead times) and why "
+    "earlier is cheaper; state that mass, Isp and target miss are the user's assumptions; "
+    "4) uncertainty: what these numbers cannot tell us (no collision probability, mean-element accuracy); "
+    "5) next steps (3 short bullets) that a human operator or the operator's flight-dynamics team should take. "
+    "Never present the recommendation as a certain forecast and do not invent figures that are not in the facts."
+)
+EOL_MEMO_TASK = (
+    "Write one end-of-life briefing (about 250-350 words) for a space project manager covering the whole "
+    "descent of this debris object: 1) headline with how soon it is expected to come down and how uncertain "
+    "that is; 2) which crowded altitude bands it sinks through and roughly when, and which satellites it passes "
+    "close to in the screening window; 3) the ground-risk picture: the latitude band it can come down within and "
+    "the share of Earth's surface that covers, stating clearly that the landing point cannot be predicted this "
+    "far ahead; 4) two or three recommended actions. Use only the facts given and keep the caveats."
+)
+
 # ---------------------------------------------------------------- data context
 
 

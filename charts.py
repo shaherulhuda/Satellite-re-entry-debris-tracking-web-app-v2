@@ -49,3 +49,27 @@ def footprint_figure(inclination_deg: float, height: int = 430):
     fig.update_yaxes(range=[-90, 90], dtick=30, row=1, col=2)
     fig.update_layout(height=height, margin=dict(l=0, r=0, t=10, b=0), bargap=0.05)
     return fig
+
+
+def eol_figure(h0_km: float, rate_km_day: float, bands: list[dict], height: int = 400):
+    """Projected altitude of a decaying object against the crowded altitude bands it sinks through."""
+    fig = go.Figure()
+    proj = decay.altitude_projection(h0_km, rate_km_day, n=400)
+    top = h0_km + 40
+    colours = {"ISS orbit": "rgba(255,127,14,0.25)"}
+    for b in bands:
+        if b["lo"] > top:
+            continue
+        fig.add_hrect(y0=b["lo"], y1=min(b["hi"], top), fillcolor=colours.get(b["label"], "rgba(31,119,180,0.15)"),
+                      line_width=0, annotation_text=b["label"], annotation_position="top left",
+                      annotation_font_size=11)
+    if proj is not None:
+        t, h = proj
+        fig.add_trace(go.Scatter(x=t, y=h, mode="lines", name="Model projection",
+                                 line=dict(color="#d62728", width=3)))
+        fig.update_xaxes(title="Days from the element epoch (rough estimate)")
+    fig.add_hline(y=decay.REENTRY_ALT_KM, line=dict(color="#888", dash="dash"),
+                  annotation_text=f"re-entry threshold {decay.REENTRY_ALT_KM:.0f} km")
+    fig.update_yaxes(title="Mean altitude (km)", range=[decay.REENTRY_ALT_KM - 20, top])
+    fig.update_layout(height=height, margin=dict(l=0, r=0, t=10, b=0), showlegend=False)
+    return fig

@@ -34,17 +34,21 @@ def _jd_grid(jd0: float, fr0: float, offsets_s: np.ndarray):
 
 def screen(primary: dict, catalogue: pd.DataFrame, records_by_norad: dict, start_jd: float,
            hours: float = 6.0, step_s: float = 10.0, threshold_km: float = 10.0,
-           alt_margin_km: float = 30.0, chunk: int = 200) -> tuple[pd.DataFrame, int]:
+           alt_margin_km: float = 30.0, chunk: int | None = None,
+           primary_band: tuple[float, float] | None = None) -> tuple[pd.DataFrame, int]:
     """Return (events, n_candidates). Events are sorted by miss distance.
 
     start_jd is a Julian date (UTC, as used by sgp4). Columns: name, norad_id, tca_jd,
-    miss_km, rel_speed_km_s.
+    miss_km, rel_speed_km_s. `catalogue` is the set of candidates to screen against; if the
+    primary is not in it, pass its (perigee_km, apogee_km) as `primary_band`.
     """
     pid = int(primary["NORAD_CAT_ID"])
-    prow = catalogue[catalogue["NORAD_CAT_ID"] == pid].iloc[0]
+    if primary_band is None:
+        prow = catalogue[catalogue["NORAD_CAT_ID"] == pid].iloc[0]
+        primary_band = (float(prow["perigee_km"]), float(prow["apogee_km"]))
     cand = catalogue[(catalogue["NORAD_CAT_ID"] != pid)
-                     & (catalogue["perigee_km"] <= prow["apogee_km"] + alt_margin_km)
-                     & (catalogue["apogee_km"] >= prow["perigee_km"] - alt_margin_km)]
+                     & (catalogue["perigee_km"] <= primary_band[1] + alt_margin_km)
+                     & (catalogue["apogee_km"] >= primary_band[0] - alt_margin_km)]
     n_cand = len(cand)
     if n_cand == 0:
         return pd.DataFrame(columns=["name", "norad_id", "tca_jd", "miss_km", "rel_speed_km_s"]), 0
@@ -61,6 +65,8 @@ def screen(primary: dict, catalogue: pd.DataFrame, records_by_norad: dict, start
     coarse_thr = float(np.hypot(threshold_km, 0.5 * V_REL_MAX_KM_S * step_s)) + 1.0
     events = []
     ids = cand["NORAD_CAT_ID"].to_numpy(int)
+    if chunk is None:  # keep each batch's position arrays to a few tens of MB
+        chunk = int(max(10, min(200, 1_500_000 // len(offsets))))
     for k in range(0, n_cand, chunk):
         batch_ids = ids[k:k + chunk]
         sats = [to_satrec(records_by_norad[int(i)]) for i in batch_ids]
