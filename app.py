@@ -1,4 +1,6 @@
 """Re-Entry & Debris Mitigation Assistant (Streamlit UI). Physics lives in the other modules."""
+import os
+
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -11,6 +13,7 @@ import decay
 import footprint
 import globe
 import history
+import llm
 import orbits
 
 st.set_page_config(page_title="Re-Entry & Debris Mitigation Assistant", layout="wide")
@@ -41,7 +44,7 @@ components_df = decay.risk_components(df)
 st.title("Re-Entry & Debris Mitigation Assistant")
 st.caption(f"Data snapshot from {orbits.snapshot_date(df)} · {len(df):,} objects")
 
-tab_watch, tab_track, tab_conj = st.tabs(["Watchlist", "Tracker", "Conjunctions"])
+tab_watch, tab_track, tab_conj, tab_ai = st.tabs(["Watchlist", "Tracker", "Conjunctions", "Assistant (AI)"])
 
 
 @st.cache_data(ttl=300)
@@ -226,6 +229,107 @@ with tab_conj:
                 st.caption("Objects that stay within ~20 km of the primary for the whole window (docked modules, tight formations) are ignored. "
                            "Mean-element positions are only good to roughly a kilometre or more, and worse for old element sets.")
 
+# ---------------------------------------------------------------- Assistant (optional, needs an API key)
+def _secret(name):
+    if os.environ.get(name):
+        return os.environ[name]
+    try:
+        return st.secrets.get(name)
+    except Exception:  # no secrets file
+        return None
+
+
+with tab_ai:
+    st.subheader("Assistant (AI)")
+    st.caption("Optional. The app is fully offline without this tab. When you add an Anthropic API key the assistant can "
+               "explain results in plain language. It never calculates orbits: it only sees numbers this app computed, "
+               "or looks data up through the app's own functions.")
+    pasted = st.text_input("Anthropic API key", type="password", key="pasted_key",
+                           help="Kept only in this browser session; not stored or logged.")
+    configured = _secret("ANTHROPIC_API_KEY")
+    api_key = pasted or configured
+    key_from_config = bool(configured) and not pasted
+
+    if not api_key:
+        st.info("AI features are off. Paste a key above, or set `ANTHROPIC_API_KEY` as an environment variable or in "
+                "Streamlit secrets. Everything else in the app works without it.")
+    else:
+        allowed = True
+        if key_from_config:
+            gate = _secret("ASSISTANT_PASSWORD")
+            if gate:
+                allowed = st.text_input("Access code", type="password", key="ai_gate") == gate
+                if not allowed:
+                    st.warning("Enter the access code to use the assistant.")
+            else:
+                st.warning("This deployment uses a key from its configuration, so anyone with the link can spend it. "
+                           "Set `ASSISTANT_PASSWORD` to require an access code.")
+        if allowed:
+            max_req = int(_secret("ASSISTANT_MAX_REQUESTS") or 30)
+            used = st.session_state.setdefault("ai_requests", 0)
+            model = st.selectbox("Model", list(llm.MODELS), format_func=llm.MODELS.get, key="ai_model")
+            st.caption(f"{used}/{max_req} requests used in this session.")
+            ctx = llm.DataContext(df, records, components_df, weights, hist_all)
+
+            def guarded(fn):
+                """Run an API call with the request cap and friendly errors."""
+                if st.session_state["ai_requests"] >= max_req:
+                    st.error("Session request limit reached. Reload the page to reset it.")
+                    return None
+                st.session_state["ai_requests"] += 1
+                try:
+                    return fn(llm.make_client(pasted or None))
+                except Exception as exc:
+                    st.error(llm.friendly_error(exc))
+                    return None
+
+            t_brief, t_risk, t_chat = st.tabs(["Object briefing", "Risk explanation", "Ask the data"])
+            for tab, kind, task, button in ((t_brief, "brief", llm.BRIEFING_TASK, "Generate briefing"),
+                                            (t_risk, "risk", llm.RISK_TASK, "Explain risk score")):
+                with tab:
+                    pick = st.selectbox("Object", ids, index=default, format_func=label, key=f"ai_pick_{kind}")
+                    facts = llm.object_facts(ctx, int(pick))
+                    if st.button(button, key=f"ai_go_{kind}"):
+                        with st.spinner("Asking the model…"):
+                            res = guarded(lambda c: llm.explain(c, model, facts, task))
+                        if res:
+                            st.session_state[f"ai_out_{kind}"] = (pick, res)
+                    saved = st.session_state.get(f"ai_out_{kind}")
+                    if saved and saved[0] == pick:
+                        st.markdown(saved[1][0])
+                        st.caption(f"{saved[1][1]['input_tokens']} input / {saved[1][1]['output_tokens']} output tokens")
+                    with st.expander("Facts sent to the model (computed by this app)"):
+                        st.json(facts)
+
+            with t_chat:
+                st.caption("Examples: *Which objects below 200 km have an inclination over 50°?* · "
+                           "*Why is STARLINK-1433 ranked so high?* · *Any close approaches for the ISS in the next 6 hours?*")
+                chat_hist = st.session_state.setdefault("ai_chat", [])
+                for m in chat_hist:
+                    with st.chat_message(m["role"]):
+                        st.markdown(m["content"])
+                        if m.get("trace"):
+                            st.caption("Looked up: " + ", ".join(f"{t['tool']}({t['input']})" for t in m["trace"]))
+                q = st.chat_input("Ask about the catalogue…")
+                if q:
+                    with st.chat_message("user"):
+                        st.markdown(q)
+                    with st.chat_message("assistant"):
+                        with st.spinner("Working…"):
+                            plain = [{"role": m["role"], "content": m["content"]} for m in chat_hist]
+                            res = guarded(lambda c: llm.chat(c, model, ctx, plain, q))
+                        if res:
+                            answer, trace, usage = res
+                            st.markdown(answer)
+                            if trace:
+                                st.caption("Looked up: " + ", ".join(f"{t['tool']}({t['input']})" for t in trace))
+                            st.caption(f"{usage['input_tokens']} input / {usage['output_tokens']} output tokens")
+                            chat_hist += [{"role": "user", "content": q},
+                                          {"role": "assistant", "content": answer, "trace": trace}]
+                if chat_hist and st.button("Clear chat"):
+                    st.session_state["ai_chat"] = []
+                    st.rerun()
+
 with st.expander("How these numbers are computed"):
     st.markdown(
         "- **Perigee / apogee:** a from mean motion via Kepler's third law (n²a³ = μ); altitude = a(1∓e) − 6378.137 km.\n"
@@ -236,6 +340,7 @@ with st.expander("How these numbers are computed"):
         "- **Risk score:** weighted blend of perigee, decay time, inclination and object type; weights are adjustable above.\n"
         "- **Footprint:** latitude band ±min(i, 180−i); time per latitude from sin φ = sin i · sin u.\n"
         "- **Conjunctions:** coarse-grid SGP4 screening with 0.5 s refinement of local minima.\n"
+        "- **Assistant (optional):** off unless an API key is supplied. The model only receives numbers computed above, or calls the app's own lookup functions; it never computes orbits.\n"
         "- **Limits:** one element set per object (no history until snapshots are added), mean elements are only km-accurate, "
         "and active satellites that manoeuvre invalidate drag-based decay estimates."
     )
