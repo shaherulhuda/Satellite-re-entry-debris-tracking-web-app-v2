@@ -239,12 +239,12 @@ def _secret(name):
         return None
 
 
-# floating chat launcher (bottom-right); the popover opens upward and closes with the same button
+# floating chat launcher (top-right, below Streamlit's toolbar); the popover opens downward and closes with the same button
 st.markdown(
     """<style>
-    .st-key-ai_fab { position: fixed; bottom: 1.2rem; right: 1.5rem; z-index: 1000; width: auto !important; }
+    .st-key-ai_fab { position: fixed; top: 3.75rem; right: 1.5rem; z-index: 1000; width: auto !important; }
     .st-key-ai_fab button { border-radius: 999px; box-shadow: 0 2px 10px rgba(0,0,0,.35); font-weight: 600; }
-    [data-testid="stPopoverBody"] { width: min(520px, 92vw); max-height: 76vh; overflow-y: auto; }
+    [data-testid="stPopoverBody"] { width: min(520px, 92vw); max-height: calc(100vh - 8rem); overflow-y: auto; }
     </style>""",
     unsafe_allow_html=True,
 )
