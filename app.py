@@ -29,7 +29,7 @@ with tab_watch:
     st.subheader("50 lowest-perigee objects")
     st.dataframe(
         orbits.watchlist(df, 50),
-        use_container_width=True,
+        width='stretch',
         hide_index=True,
         column_config={
             "NORAD ID": st.column_config.NumberColumn(format="%d"),
@@ -67,4 +67,4 @@ with tab_track:
                         lataxis_range=[-90, 90], lonaxis_range=[-180, 180])
         fig.update_layout(height=550, margin=dict(l=0, r=0, t=10, b=0),
                           legend=dict(orientation="h", y=-0.05))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')

@@ -68,7 +68,7 @@ def current_position(record: dict, when=None) -> dict:
     """Sub-satellite point (lat, lon, altitude km) at `when` (default: now)."""
     sat = make_satellite(record)
     t = when if when is not None else TS.now()
-    sp = wgs84.subpoint_of(sat.at(t))
+    sp = wgs84.geographic_position_of(sat.at(t))
     return {
         "lat": sp.latitude.degrees,
         "lon": sp.longitude.degrees,
