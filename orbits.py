@@ -35,12 +35,17 @@ def compute_altitudes(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def load_catalog(path: Path | str = DATA_PATH) -> pd.DataFrame:
-    """Load the file into a DataFrame with altitudes computed for every object."""
-    df = pd.DataFrame(load_records(path))
+def catalog_from_records(records: list[dict]) -> pd.DataFrame:
+    """DataFrame with altitudes computed for every object in a list of OMM records."""
+    df = pd.DataFrame(records)
     df = df[df["MEAN_MOTION"] > 0].reset_index(drop=True)
     df["EPOCH_DT"] = pd.to_datetime(df["EPOCH"])
     return compute_altitudes(df)
+
+
+def load_catalog(path: Path | str = DATA_PATH) -> pd.DataFrame:
+    """Load the file into a DataFrame with altitudes computed for every object."""
+    return catalog_from_records(load_records(path))
 
 
 def snapshot_date(df: pd.DataFrame) -> str:
