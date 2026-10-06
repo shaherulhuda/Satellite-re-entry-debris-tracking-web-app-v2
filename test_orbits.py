@@ -27,3 +27,13 @@ def test_orbit_path_and_globe():
     r = (p["x"] ** 2 + p["y"] ** 2 + p["z"] ** 2) ** 0.5
     assert r.min() > orbits.EARTH_RADIUS_KM
     assert len(globe.orbit_figure([p]).data) > 5
+
+
+def test_animation_frames():
+    import globe
+    rec = orbits.load_records()[0]
+    p = orbits.orbit_path_xyz(rec, anim_minutes=10)
+    p["name"] = "x"
+    assert p["anim"].shape == (3, 11)
+    fig = globe.orbit_figure([p])
+    assert len(fig.frames) == 11
