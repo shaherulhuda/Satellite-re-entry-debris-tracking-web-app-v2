@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from skyfield.api import EarthSatellite, load, wgs84
+from skyfield.framelib import itrs
 
 MU_EARTH_KM3_S2 = 398600.4418  # Earth gravitational parameter
 EARTH_RADIUS_KM = 6378.137  # WGS-84 equatorial radius
@@ -97,22 +98,18 @@ def ground_track(record: dict, n_orbits: int = 3, step_s: float = 30.0, start=No
     return pd.DataFrame({"lat": lat, "lon": lon})
 
 
-def orbit_path_xyz(record: dict, n_points: int = 180, start=None, anim_minutes: int = 0) -> dict:
-    """One full orbit in the inertial (TEME) frame, in km, plus the current point.
+def orbit_path_xyz(record: dict, n_points: int = 180, start=None) -> dict:
+    """One full orbit, in km, evenly spaced in time over one period.
 
-    Returns arrays x, y, z for the path and `now` = (x, y, z) at `start`.
-    With anim_minutes > 0 also returns `anim`, a (3, anim_minutes + 1) array of
-    positions at one-minute steps from `start`, for animating motion along the orbit.
+    Coordinates are in the inertial frame as seen at `start`, expressed on Earth-fixed
+    axes (ITRS at `start`): index 0 is directly comparable with latitude/longitude on a
+    globe. Later Earth rotation is applied by the caller (about z, at the sidereal rate).
     """
     sat = make_satellite(record)
     period_s = 86400.0 / float(record["MEAN_MOTION"])
     t0 = start if start is not None else TS.now()
     offsets = np.linspace(0.0, period_s, n_points)
     t = TS.tt_jd(t0.tt + offsets / 86400.0)
-    x, y, z = sat.at(t).position.km
-    nx, ny, nz = sat.at(t0).position.km
-    out = {"x": np.asarray(x), "y": np.asarray(y), "z": np.asarray(z), "now": (float(nx), float(ny), float(nz))}
-    if anim_minutes > 0:
-        ta = TS.tt_jd(t0.tt + np.arange(anim_minutes + 1) / 1440.0)
-        out["anim"] = np.asarray(sat.at(ta).position.km)
-    return out
+    gcrs = sat.at(t).position.km  # (3, n) inertial axes
+    x, y, z = itrs.rotation_at(t0) @ gcrs  # fixed to the Earth at t0
+    return {"x": x, "y": y, "z": z, "period_s": period_s}

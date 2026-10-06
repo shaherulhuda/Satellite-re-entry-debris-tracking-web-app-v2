@@ -1,5 +1,5 @@
 """Re-Entry & Debris Mitigation Assistant (Streamlit UI)."""
-import plotly.graph_objects as go
+import streamlit.components.v1 as components
 import streamlit as st
 
 import globe
@@ -20,7 +20,6 @@ def get_records_by_norad():
 
 df = get_catalog()
 records = get_records_by_norad()
-ANIM_MINUTES = 95  # about one low-Earth-orbit revolution
 
 st.title("Re-Entry & Debris Mitigation Assistant")
 st.caption(f"Data snapshot from {orbits.snapshot_date(df)} · {len(df):,} objects")
@@ -33,7 +32,7 @@ def watchlist_paths(norad_ids: tuple):
     for nid in norad_ids:
         rec = records[nid]
         try:
-            p = orbits.orbit_path_xyz(rec, n_points=120, anim_minutes=ANIM_MINUTES)
+            p = orbits.orbit_path_xyz(rec, n_points=120)
         except Exception:
             continue
         row = df[df["NORAD_CAT_ID"] == nid].iloc[0]
@@ -46,10 +45,9 @@ def watchlist_paths(norad_ids: tuple):
 with tab_watch:
     st.subheader("50 lowest-perigee objects")
     wl = orbits.watchlist(df, 50)
-    st.caption("Orbits of the watchlist objects around Earth (inertial frame, one revolution each; yellow dots = positions now). Press ▶ Play to animate the next ~95 minutes in 1-minute steps. Drag to rotate, scroll to zoom.")
-    spin = st.checkbox("Rotate camera while playing", value=True, key="spin_w")
-    st.plotly_chart(globe.orbit_figure(watchlist_paths(tuple(int(i) for i in wl["NORAD ID"])), spin=spin),
-                    width="stretch")
+    st.caption("Orbits of the watchlist objects around a rotating Earth (one revolution each; yellow dots = positions now). "
+               "The animation loops until you press Pause. Drag to rotate, scroll to zoom.")
+    components.html(globe.orbit_html(watchlist_paths(tuple(int(i) for i in wl["NORAD ID"]))), height=660)
     st.dataframe(
         wl,
         width='stretch',
@@ -81,20 +79,10 @@ with tab_track:
         c4.metric("Perigee / Apogee", f"{row['perigee_km']:.0f} / {row['apogee_km']:.0f} km")
         st.caption(f"Position at {pos['time']:%Y-%m-%d %H:%M:%S} UTC (now), propagated from the snapshot elements.")
 
-        st.markdown("**3D orbit** (inertial frame, one revolution; yellow dot = position now)")
-        path = orbits.orbit_path_xyz(record, anim_minutes=ANIM_MINUTES)
+        st.markdown("**3D orbit** (yellow dot = position now; the animation loops until you press Pause)")
+        path = orbits.orbit_path_xyz(record, n_points=360)
         path["name"] = name
-        spin_t = st.checkbox("Rotate camera while playing", value=True, key="spin_t")
-        st.plotly_chart(globe.orbit_figure([path], height=600, highlight=True, spin=spin_t), width="stretch")
+        components.html(globe.orbit_html([path], height=600, highlight=True), height=610)
 
         st.markdown("**Ground track** (next 3 orbits)")
-        fig = go.Figure()
-        fig.add_trace(go.Scattergeo(lat=track["lat"], lon=track["lon"], mode="lines",
-                                    line=dict(width=2, color="#1f77b4"), name="3-orbit ground track"))
-        fig.add_trace(go.Scattergeo(lat=[pos["lat"]], lon=[pos["lon"]], mode="markers",
-                                    marker=dict(size=11, color="red"), name="Current position"))
-        fig.update_geos(projection_type="equirectangular", showland=True, showcountries=True,
-                        lataxis_range=[-90, 90], lonaxis_range=[-180, 180])
-        fig.update_layout(height=550, margin=dict(l=0, r=0, t=10, b=0),
-                          legend=dict(orientation="h", y=-0.05))
-        st.plotly_chart(fig, width='stretch')
+        st.plotly_chart(globe.ground_track_figure(track, pos), width="stretch")

@@ -19,21 +19,23 @@ def test_tracker():
     assert len(orbits.ground_track(rec)) > 100
 
 
-def test_orbit_path_and_globe():
+def test_orbit_path_and_globe_html():
     import globe
     rec = orbits.load_records()[0]
     p = orbits.orbit_path_xyz(rec)
     p["name"] = rec["OBJECT_NAME"]
     r = (p["x"] ** 2 + p["y"] ** 2 + p["z"] ** 2) ** 0.5
     assert r.min() > orbits.EARTH_RADIUS_KM
-    assert len(globe.orbit_figure([p]).data) > 5
+    html = globe.orbit_html([p])
+    assert "requestAnimationFrame" in html and "Pause" in html
+    assert "https://" not in html.split("<script", 1)[0]  # nothing fetched at load
 
 
-def test_animation_frames():
-    import globe
+def test_path_is_earth_fixed_at_start():
+    import math
     rec = orbits.load_records()[0]
-    p = orbits.orbit_path_xyz(rec, anim_minutes=10)
-    p["name"] = "x"
-    assert p["anim"].shape == (3, 11)
-    fig = globe.orbit_figure([p])
-    assert len(fig.frames) == 11
+    t0 = orbits.TS.utc(2026, 10, 6, 12, 0, 0)
+    p = orbits.orbit_path_xyz(rec, start=t0)
+    lon = math.degrees(math.atan2(p["y"][0], p["x"][0]))
+    ref = orbits.current_position(rec, when=t0)["lon"]
+    assert abs((lon - ref + 180) % 360 - 180) < 0.05
