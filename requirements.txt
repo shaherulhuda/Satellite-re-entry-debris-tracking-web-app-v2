@@ -1,0 +1,5 @@
+streamlit==1.65.0
+skyfield==1.55
+plotly==7.1.0
+pandas==3.0.5
+numpy==2.5.3
