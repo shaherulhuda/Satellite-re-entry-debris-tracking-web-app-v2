@@ -17,3 +17,13 @@ def test_tracker():
     pos = orbits.current_position(rec)
     assert -90 <= pos["lat"] <= 90 and -180 <= pos["lon"] <= 180
     assert len(orbits.ground_track(rec)) > 100
+
+
+def test_orbit_path_and_globe():
+    import globe
+    rec = orbits.load_records()[0]
+    p = orbits.orbit_path_xyz(rec)
+    p["name"] = rec["OBJECT_NAME"]
+    r = (p["x"] ** 2 + p["y"] ** 2 + p["z"] ** 2) ** 0.5
+    assert r.min() > orbits.EARTH_RADIUS_KM
+    assert len(globe.orbit_figure([p]).data) > 5

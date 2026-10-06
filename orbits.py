@@ -95,3 +95,18 @@ def ground_track(record: dict, n_orbits: int = 3, step_s: float = 30.0, start=No
     lat = np.insert(lat, jumps, np.nan)
     lon = np.insert(lon, jumps, np.nan)
     return pd.DataFrame({"lat": lat, "lon": lon})
+
+
+def orbit_path_xyz(record: dict, n_points: int = 180, start=None) -> dict:
+    """One full orbit in the inertial (TEME) frame, in km, plus the current point.
+
+    Returns arrays x, y, z for the path and `now` = (x, y, z) at `start`.
+    """
+    sat = make_satellite(record)
+    period_s = 86400.0 / float(record["MEAN_MOTION"])
+    t0 = start if start is not None else TS.now()
+    offsets = np.linspace(0.0, period_s, n_points)
+    t = TS.tt_jd(t0.tt + offsets / 86400.0)
+    x, y, z = sat.at(t).position.km
+    nx, ny, nz = sat.at(t0).position.km
+    return {"x": np.asarray(x), "y": np.asarray(y), "z": np.asarray(z), "now": (float(nx), float(ny), float(nz))}
