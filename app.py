@@ -2,6 +2,7 @@
 import plotly.graph_objects as go
 import streamlit as st
 
+import globe
 import orbits
 
 st.set_page_config(page_title="Re-Entry & Debris Mitigation Assistant", layout="wide")
@@ -25,10 +26,30 @@ st.caption(f"Data snapshot from {orbits.snapshot_date(df)} · {len(df):,} object
 
 tab_watch, tab_track = st.tabs(["Watchlist", "Tracker"])
 
+@st.cache_data
+def watchlist_paths(norad_ids: tuple):
+    out = []
+    for nid in norad_ids:
+        rec = records[nid]
+        try:
+            p = orbits.orbit_path_xyz(rec, n_points=120)
+        except Exception:
+            continue
+        row = df[df["NORAD_CAT_ID"] == nid].iloc[0]
+        p["name"] = rec["OBJECT_NAME"]
+        p["hover"] = f"{rec['OBJECT_NAME']}<br>perigee {row['perigee_km']:.0f} km · apogee {row['apogee_km']:.0f} km"
+        out.append(p)
+    return out
+
+
 with tab_watch:
     st.subheader("50 lowest-perigee objects")
+    wl = orbits.watchlist(df, 50)
+    st.caption("Orbits of the watchlist objects around Earth (inertial frame, one revolution each; yellow dots = positions now). Drag to rotate, scroll to zoom.")
+    st.plotly_chart(globe.orbit_figure(watchlist_paths(tuple(int(i) for i in wl["NORAD ID"]))),
+                    width="stretch")
     st.dataframe(
-        orbits.watchlist(df, 50),
+        wl,
         width='stretch',
         hide_index=True,
         column_config={
@@ -58,6 +79,12 @@ with tab_track:
         c4.metric("Perigee / Apogee", f"{row['perigee_km']:.0f} / {row['apogee_km']:.0f} km")
         st.caption(f"Position at {pos['time']:%Y-%m-%d %H:%M:%S} UTC (now), propagated from the snapshot elements.")
 
+        st.markdown("**3D orbit** (inertial frame, one revolution; yellow dot = position now)")
+        path = orbits.orbit_path_xyz(record)
+        path["name"] = name
+        st.plotly_chart(globe.orbit_figure([path], height=600, highlight=True), width="stretch")
+
+        st.markdown("**Ground track** (next 3 orbits)")
         fig = go.Figure()
         fig.add_trace(go.Scattergeo(lat=track["lat"], lon=track["lon"], mode="lines",
                                     line=dict(width=2, color="#1f77b4"), name="3-orbit ground track"))
