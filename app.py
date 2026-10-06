@@ -44,7 +44,7 @@ components_df = decay.risk_components(df)
 st.title("Re-Entry & Debris Mitigation Assistant")
 st.caption(f"Data snapshot from {orbits.snapshot_date(df)} · {len(df):,} objects")
 
-tab_watch, tab_track, tab_conj, tab_ai = st.tabs(["Watchlist", "Tracker", "Conjunctions", "Assistant (AI)"])
+tab_watch, tab_track, tab_conj = st.tabs(["Watchlist", "Tracker", "Conjunctions"])
 
 
 @st.cache_data(ttl=300)
@@ -239,96 +239,105 @@ def _secret(name):
         return None
 
 
-with tab_ai:
-    st.subheader("Assistant (AI)")
-    st.caption("Optional. The app is fully offline without this tab. When you add an Anthropic API key the assistant can "
-               "explain results in plain language. It never calculates orbits: it only sees numbers this app computed, "
-               "or looks data up through the app's own functions.")
-    pasted = st.text_input("Anthropic API key", type="password", key="pasted_key",
-                           help="Kept only in this browser session; not stored or logged.")
-    configured = _secret("ANTHROPIC_API_KEY")
-    api_key = pasted or configured
-    key_from_config = bool(configured) and not pasted
+# floating chat launcher (bottom-right); the popover opens upward and closes with the same button
+st.markdown(
+    """<style>
+    .st-key-ai_fab { position: fixed; bottom: 1.2rem; right: 1.5rem; z-index: 1000; width: auto !important; }
+    .st-key-ai_fab button { border-radius: 999px; box-shadow: 0 2px 10px rgba(0,0,0,.35); font-weight: 600; }
+    [data-testid="stPopoverBody"] { width: min(520px, 92vw); max-height: 76vh; overflow-y: auto; }
+    </style>""",
+    unsafe_allow_html=True,
+)
+with st.container(key="ai_fab"):
+    with st.popover("💬 Ask the assistant"):
+        st.caption("Optional. The app is fully offline without this. When you add an Anthropic API key the assistant can "
+                   "explain results in plain language. It never calculates orbits: it only sees numbers this app computed, "
+                   "or looks data up through the app's own functions.")
+        pasted = st.text_input("Anthropic API key", type="password", key="pasted_key",
+                               help="Kept only in this browser session; not stored or logged.")
+        configured = _secret("ANTHROPIC_API_KEY")
+        api_key = pasted or configured
+        key_from_config = bool(configured) and not pasted
 
-    if not api_key:
-        st.info("AI features are off. Paste a key above, or set `ANTHROPIC_API_KEY` as an environment variable or in "
-                "Streamlit secrets. Everything else in the app works without it.")
-    else:
-        allowed = True
-        if key_from_config:
-            gate = _secret("ASSISTANT_PASSWORD")
-            if gate:
-                allowed = st.text_input("Access code", type="password", key="ai_gate") == gate
-                if not allowed:
-                    st.warning("Enter the access code to use the assistant.")
-            else:
-                st.warning("This deployment uses a key from its configuration, so anyone with the link can spend it. "
-                           "Set `ASSISTANT_PASSWORD` to require an access code.")
-        if allowed:
-            max_req = int(_secret("ASSISTANT_MAX_REQUESTS") or 30)
-            used = st.session_state.setdefault("ai_requests", 0)
-            model = st.selectbox("Model", list(llm.MODELS), format_func=llm.MODELS.get, key="ai_model")
-            st.caption(f"{used}/{max_req} requests used in this session.")
-            ctx = llm.DataContext(df, records, components_df, weights, hist_all)
+        if not api_key:
+            st.info("AI features are off. Paste a key above, or set `ANTHROPIC_API_KEY` as an environment variable or in "
+                    "Streamlit secrets. Everything else in the app works without it.")
+        else:
+            allowed = True
+            if key_from_config:
+                gate = _secret("ASSISTANT_PASSWORD")
+                if gate:
+                    allowed = st.text_input("Access code", type="password", key="ai_gate") == gate
+                    if not allowed:
+                        st.warning("Enter the access code to use the assistant.")
+                else:
+                    st.warning("This deployment uses a key from its configuration, so anyone with the link can spend it. "
+                               "Set `ASSISTANT_PASSWORD` to require an access code.")
+            if allowed:
+                max_req = int(_secret("ASSISTANT_MAX_REQUESTS") or 30)
+                used = st.session_state.setdefault("ai_requests", 0)
+                model = st.selectbox("Model", list(llm.MODELS), format_func=llm.MODELS.get, key="ai_model")
+                st.caption(f"{used}/{max_req} requests used in this session.")
+                ctx = llm.DataContext(df, records, components_df, weights, hist_all)
 
-            def guarded(fn):
-                """Run an API call with the request cap and friendly errors."""
-                if st.session_state["ai_requests"] >= max_req:
-                    st.error("Session request limit reached. Reload the page to reset it.")
-                    return None
-                st.session_state["ai_requests"] += 1
-                try:
-                    return fn(llm.make_client(pasted or None))
-                except Exception as exc:
-                    st.error(llm.friendly_error(exc))
-                    return None
+                def guarded(fn):
+                    """Run an API call with the request cap and friendly errors."""
+                    if st.session_state["ai_requests"] >= max_req:
+                        st.error("Session request limit reached. Reload the page to reset it.")
+                        return None
+                    st.session_state["ai_requests"] += 1
+                    try:
+                        return fn(llm.make_client(pasted or None))
+                    except Exception as exc:
+                        st.error(llm.friendly_error(exc))
+                        return None
 
-            t_brief, t_risk, t_chat = st.tabs(["Object briefing", "Risk explanation", "Ask the data"])
-            for tab, kind, task, button in ((t_brief, "brief", llm.BRIEFING_TASK, "Generate briefing"),
-                                            (t_risk, "risk", llm.RISK_TASK, "Explain risk score")):
-                with tab:
-                    pick = st.selectbox("Object", ids, index=default, format_func=label, key=f"ai_pick_{kind}")
-                    facts = llm.object_facts(ctx, int(pick))
-                    if st.button(button, key=f"ai_go_{kind}"):
-                        with st.spinner("Asking the model…"):
-                            res = guarded(lambda c: llm.explain(c, model, facts, task))
-                        if res:
-                            st.session_state[f"ai_out_{kind}"] = (pick, res)
-                    saved = st.session_state.get(f"ai_out_{kind}")
-                    if saved and saved[0] == pick:
-                        st.markdown(saved[1][0])
-                        st.caption(f"{saved[1][1]['input_tokens']} input / {saved[1][1]['output_tokens']} output tokens")
-                    with st.expander("Facts sent to the model (computed by this app)"):
-                        st.json(facts)
+                t_chat, t_brief, t_risk = st.tabs(["Ask the data", "Object briefing", "Risk explanation"])
+                for tab, kind, task, button in ((t_brief, "brief", llm.BRIEFING_TASK, "Generate briefing"),
+                                                (t_risk, "risk", llm.RISK_TASK, "Explain risk score")):
+                    with tab:
+                        pick = st.selectbox("Object", ids, index=default, format_func=label, key=f"ai_pick_{kind}")
+                        facts = llm.object_facts(ctx, int(pick))
+                        if st.button(button, key=f"ai_go_{kind}"):
+                            with st.spinner("Asking the model…"):
+                                res = guarded(lambda c: llm.explain(c, model, facts, task))
+                            if res:
+                                st.session_state[f"ai_out_{kind}"] = (pick, res)
+                        saved = st.session_state.get(f"ai_out_{kind}")
+                        if saved and saved[0] == pick:
+                            st.markdown(saved[1][0])
+                            st.caption(f"{saved[1][1]['input_tokens']} input / {saved[1][1]['output_tokens']} output tokens")
+                        with st.expander("Facts sent to the model (computed by this app)"):
+                            st.json(facts)
 
-            with t_chat:
-                st.caption("Examples: *Which objects below 200 km have an inclination over 50°?* · "
-                           "*Why is STARLINK-1433 ranked so high?* · *Any close approaches for the ISS in the next 6 hours?*")
-                chat_hist = st.session_state.setdefault("ai_chat", [])
-                for m in chat_hist:
-                    with st.chat_message(m["role"]):
-                        st.markdown(m["content"])
-                        if m.get("trace"):
-                            st.caption("Looked up: " + ", ".join(f"{t['tool']}({t['input']})" for t in m["trace"]))
-                q = st.chat_input("Ask about the catalogue…")
-                if q:
-                    with st.chat_message("user"):
-                        st.markdown(q)
-                    with st.chat_message("assistant"):
-                        with st.spinner("Working…"):
-                            plain = [{"role": m["role"], "content": m["content"]} for m in chat_hist]
-                            res = guarded(lambda c: llm.chat(c, model, ctx, plain, q))
-                        if res:
-                            answer, trace, usage = res
-                            st.markdown(answer)
-                            if trace:
-                                st.caption("Looked up: " + ", ".join(f"{t['tool']}({t['input']})" for t in trace))
-                            st.caption(f"{usage['input_tokens']} input / {usage['output_tokens']} output tokens")
-                            chat_hist += [{"role": "user", "content": q},
-                                          {"role": "assistant", "content": answer, "trace": trace}]
-                if chat_hist and st.button("Clear chat"):
-                    st.session_state["ai_chat"] = []
-                    st.rerun()
+                with t_chat:
+                    st.caption("Examples: *Which objects below 200 km have an inclination over 50°?* · "
+                               "*Why is STARLINK-1433 ranked so high?* · *Any close approaches for the ISS in the next 6 hours?*")
+                    chat_hist = st.session_state.setdefault("ai_chat", [])
+                    for m in chat_hist:
+                        with st.chat_message(m["role"]):
+                            st.markdown(m["content"])
+                            if m.get("trace"):
+                                st.caption("Looked up: " + ", ".join(f"{t['tool']}({t['input']})" for t in m["trace"]))
+                    q = st.chat_input("Ask about the catalogue…")
+                    if q:
+                        with st.chat_message("user"):
+                            st.markdown(q)
+                        with st.chat_message("assistant"):
+                            with st.spinner("Working…"):
+                                plain = [{"role": m["role"], "content": m["content"]} for m in chat_hist]
+                                res = guarded(lambda c: llm.chat(c, model, ctx, plain, q))
+                            if res:
+                                answer, trace, usage = res
+                                st.markdown(answer)
+                                if trace:
+                                    st.caption("Looked up: " + ", ".join(f"{t['tool']}({t['input']})" for t in trace))
+                                st.caption(f"{usage['input_tokens']} input / {usage['output_tokens']} output tokens")
+                                chat_hist += [{"role": "user", "content": q},
+                                              {"role": "assistant", "content": answer, "trace": trace}]
+                    if chat_hist and st.button("Clear chat"):
+                        st.session_state["ai_chat"] = []
+                        st.rerun()
 
 with st.expander("How these numbers are computed"):
     st.markdown(
