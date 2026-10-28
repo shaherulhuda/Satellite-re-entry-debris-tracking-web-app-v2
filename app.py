@@ -398,9 +398,7 @@ EVENT_CONFIG = {
 
 with tab_triage:
     st.subheader("Conjunctions & triage")
-    st.markdown("Pick one of the watchlist satellites, a time window and a distance. Orbisk flies that satellite and every other "
-                "satellite and debris fragment in a similar altitude band forward in time and lists the passes closer than your "
-                "distance. The closest ones appear first as colour-coded cards. This is a screening aid, not a collision probability.")
+    st.markdown("Pick a satellite, a time window and a distance; Orbisk lists the closest passes.")
     asset_ids = ids  # the 50 highest-risk active satellites, same as the watchlist
     with st.form("tri_asset_form"):
         a1, a2, a3 = st.columns([3, 1, 1])
@@ -408,7 +406,7 @@ with tab_triage:
         days = a2.slider("Window (days)", 1, 30, 2)
         hours = days * 24
         thr = a3.slider("Report within (km)", 1, 100, 25)
-        run = st.form_submit_button("Run screening")
+        run = st.form_submit_button("Run screening", type="primary")
     if run:
         jd0, ts0 = start_time("Snapshot time")
         with st.spinner("Propagating candidates…"):
@@ -436,17 +434,18 @@ with tab_triage:
             closest = ev.sort_values("miss_km").head(6)
             st.markdown("**Closest passes**")
             card_cols = st.columns(3)
+            stripes = []
             for k, r in enumerate(closest.itertuples()):
                 band = miss_band(r.miss_km)
+                stripes.append(f".st-key-pass_card_{k} {{ border-left: 6px solid {band[1]} !important; }}")
                 with card_cols[k % 3]:
-                    st.markdown(
-                        f'<div style="border:1px solid rgba(128,128,128,.35);border-left:6px solid {band[1]};border-radius:8px;'
-                        f'padding:.6rem .8rem;margin-bottom:.6rem">'
-                        f'<div style="font-weight:600">{html.escape(str(r.name))}</div>'
-                        f'<div style="font-size:.8rem;opacity:.7">NORAD {int(r.norad_id)}</div>'
-                        f'<div style="font-size:1.6rem;font-weight:600;color:{band[1]}">{r.miss_km:.2f} km</div>'
-                        f'<div style="font-size:.8rem">{band[0]} · {fmt_utc(r.tca_jd)} UTC · {r.rel_speed_km_s:.1f} km/s</div></div>',
-                        unsafe_allow_html=True)
+                    with st.container(border=True, key=f"pass_card_{k}"):  # native bordered panel: follows the theme's border colour
+                        st.markdown(
+                            f'**{html.escape(str(r.name))}**  \n<span style="font-size:.8rem;opacity:.7">NORAD {int(r.norad_id)}</span>'
+                            f'<div style="font-size:1.6rem;font-weight:600;color:{band[1]}">{r.miss_km:.2f} km</div>'
+                            f'<span style="font-size:.8rem">{band[0]} · {fmt_utc(r.tca_jd)} UTC · {r.rel_speed_km_s:.1f} km/s</span>',
+                            unsafe_allow_html=True)
+            st.markdown("<style>" + "".join(stripes) + "</style>", unsafe_allow_html=True)
             if len(ev) > len(closest):
                 st.caption(f"Showing the {len(closest)} closest of {len(ev)} passes; all of them are in the table below.")
             st.markdown("**Orbit view**")

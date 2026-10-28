@@ -150,10 +150,11 @@ def test_triage_cards_and_bands():
 def test_triage_shows_intro_then_cards_table_and_csv():
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file("app.py", default_timeout=600).run()
-    assert any("Pick one of the watchlist satellites" in m.value for m in at.markdown)  # explanation before running
+    assert any(m.value == "Pick a satellite, a time window and a distance; Orbisk lists the closest passes." for m in at.markdown)
     next(b for b in at.button if b.label == "Run screening").click()
     at.run()
     assert not at.exception
-    cards = [m.value for m in at.markdown if "border-left:6px solid" in m.value]
-    assert cards and len(cards) <= 6
-    assert all(c.startswith("<div") and "\n" not in c for c in cards)  # one line: markdown would treat indented HTML as code
+    stripes = [m.value for m in at.markdown if ".st-key-pass_card_0" in m.value]
+    assert stripes and stripes[0].count("border-left: 6px solid") <= 6
+    assert all("rgba(128,128,128" not in m.value for m in at.markdown if "NORAD" in m.value or "pass_card" in m.value)  # panels are native, no hard-coded grey
+    assert at.button(key="FormSubmitter:tri_asset_form-Run screening").proto.type == "primary"
