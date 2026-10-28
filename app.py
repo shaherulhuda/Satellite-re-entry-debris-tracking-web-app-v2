@@ -468,6 +468,8 @@ def watchlist_view():
     debris_ranked = scored[scored["source"] == "debris"].sort_values("risk", ascending=False)
     deb_ids = tuple(int(i) for i in debris_ranked["NORAD_CAT_ID"])[:int(n_deb_show)]  # debris only appears as globe orbits
     tier_idx = tuple({"red": 0, "yellow": 1, "green": 2}[l] for l in levels)
+    # the globe first, then the table (the data is already loaded while the cover is shown)
+    components.html(watchlist_globe_html(table_ids, tier_idx, tuple(float(r) for r in top["risk"]), deb_ids), height=660)
     bar_hex = {"red": "#e5484d", "yellow": "#e0a800", "green": "#30a46c"}
 
     def risk_bar(score: float, level: str) -> str:
@@ -517,8 +519,6 @@ def watchlist_view():
     if ca_meta is None or not top["ca_screened"].all():
         st.caption("Close-approach columns are filled for the highest-risk objects only (`tools/compute_conjunctions.py`); "
                    "— means not screened or no approach within the threshold.")
-    # the globe comes last: the controls and the table are usable while it is still loading
-    components.html(watchlist_globe_html(table_ids, tier_idx, tuple(float(r) for r in top["risk"]), deb_ids), height=660)
 
 # ---------------------------------------------------------------- Tracker
 @st.fragment
