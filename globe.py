@@ -66,16 +66,17 @@ def coastline_trace_2d() -> go.Scatter:
                       hoverinfo="skip", showlegend=False)
 
 
-def ground_track_figure(track, pos, height: int = 520) -> go.Figure:
+def ground_track_figure(track, pos, height: int = 460) -> go.Figure:
     """2D ground track on the bundled coastlines (works offline)."""
     fig = go.Figure(coastline_trace_2d())
     fig.add_trace(go.Scatter(x=track["lon"], y=track["lat"], mode="lines", name="3-orbit ground track",
                              line=dict(width=2, color="#1f77b4")))
     fig.add_trace(go.Scatter(x=[pos["lon"]], y=[pos["lat"]], mode="markers", name="Current position",
                              marker=dict(size=11, color="red")))
-    fig.update_xaxes(range=[-180, 180], title="Longitude (°)", dtick=30, constrain="domain")
-    fig.update_yaxes(range=[-90, 90], title="Latitude (°)", dtick=30, scaleanchor="x", scaleratio=1)
-    fig.update_layout(height=height, margin=dict(l=0, r=0, t=10, b=0), legend=dict(orientation="h", y=-0.15))
+    # no fixed aspect ratio, so the map fills the full width like the other charts
+    fig.update_xaxes(range=[-180, 180], title="Longitude (°)", dtick=60)
+    fig.update_yaxes(range=[-90, 90], title="Latitude (°)", dtick=30)
+    fig.update_layout(height=height, margin=dict(l=0, r=0, t=10, b=0), legend=dict(orientation="h", y=-0.2))
     return fig
 
 
@@ -93,14 +94,14 @@ _JS = """
   const DEB = D.deb || null;             // optional debris layer (lines + moving dots), can be switched off
   let showDeb = !!DEB, forceDebLines = true, lastDebLines = -1e9;
   if (DEB) { const tr = gd.data[DEB.lineIdx]; DEB.X = tr.x; DEB.Y = tr.y; DEB.Z = tr.z; }
-  let s = 0, playing = true, speed = 300, spin = D.spin, last = null, phi = Math.atan2(D.eye[1], D.eye[0]);
+  let s = 0, playing = D.autoplay !== false, speed = 300, spin = D.spin, last = null, phi = Math.atan2(D.eye[1], D.eye[0]);
   const rad = Math.hypot(D.eye[0], D.eye[1]), ez = D.eye[2];
 
   // controls
   const bar = document.createElement('div');
   bar.style.cssText = 'position:absolute;top:8px;left:8px;z-index:10;display:flex;gap:8px;align-items:center;' +
     'font:13px sans-serif;color:#dde6f5;background:rgba(10,18,34,.75);padding:6px 10px;border-radius:6px';
-  bar.innerHTML = '<button id="pp" style="padding:4px 12px;cursor:pointer">⏸ Pause</button>' +
+  bar.innerHTML = '<button id="pp" style="padding:4px 12px;cursor:pointer">' + (playing ? '⏸ Pause' : '▶ Play') + '</button>' +
     '<label>Speed <select id="sp"><option value="60">60×</option><option value="300" selected>300×</option>' +
     '<option value="1000">1000×</option></select></label>' +
     '<label><input type="checkbox" id="rot"' + (spin ? ' checked' : '') + '> Rotate view</label>' +
@@ -192,9 +193,11 @@ def _int_or_null(a):
 
 
 def orbit_html(paths: list[dict], height: int = 650, highlight: bool = False, spin: bool = True,
-               debris: list[dict] | None = None, events: list[dict] | None = None) -> str:
+               debris: list[dict] | None = None, events: list[dict] | None = None, autoplay: bool = True) -> str:
     """paths: dicts with name, x, y, z (one period, Earth-fixed-at-start km), period_s, optional hover and
     optional `tier` (0 red, 1 yellow, 2 green, 3 cyan; colours every orbit and dot when all paths have one).
+
+    `autoplay=False` starts the animation paused at time zero (the start time of the paths, e.g. now).
 
     `events` marks conjunction points: dicts with x, y, z (km, same axes as the paths), `tier` and `hover`.
 
@@ -251,7 +254,7 @@ def orbit_html(paths: list[dict], height: int = 650, highlight: bool = False, sp
                    camera=dict(eye=dict(x=eye[0], y=eye[1], z=eye[2]))))
     data = {
         "X": X, "Y": Y, "Z": Z, "eye": eye, "spin": spin,
-        "lineIdx": line_idx, "markIdx": mark_idx, "deb": deb_data, "ev": ev_data,
+        "lineIdx": line_idx, "markIdx": mark_idx, "deb": deb_data, "ev": ev_data, "autoplay": autoplay,
         "sats": [{"x": _nan_to_null(p["x"]), "y": _nan_to_null(p["y"]), "z": _nan_to_null(p["z"]),
                   "T": p["period_s"]} for p in paths],
     }

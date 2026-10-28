@@ -46,3 +46,19 @@ def test_globe_conjunction_markers_and_cyan_tier():
     assert ev["x"] == [7000.0] and ev["idx"] >= 2
     assert "#4fd1e0" in html and "1.0 km" in html
     assert '"ev":null' in globe.orbit_html([path])
+
+
+def test_globe_can_start_paused():
+    import numpy as np
+    import globe
+    path = {"x": np.array([7000.0, 0, -7000, 0]), "y": np.array([0, 7000.0, 0, -7000]), "z": np.zeros(4), "period_s": 5400.0, "name": "A"}
+    assert '"autoplay":false' in globe.orbit_html([path], autoplay=False)
+    assert '"autoplay":true' in globe.orbit_html([path])
+
+
+def test_ground_track_map_fills_the_width():
+    import orbits
+    import globe
+    rec = orbits.load_records()[0]
+    fig = globe.ground_track_figure(orbits.ground_track(rec), orbits.current_position(rec))
+    assert fig.layout.yaxis.scaleanchor is None and fig.layout.height >= 440

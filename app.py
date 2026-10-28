@@ -279,7 +279,7 @@ with tab_track:
             c4.metric("Perigee / Apogee", f"{row['perigee_km']:.0f} / {row['apogee_km']:.0f} km")
             path = orbits.orbit_path_xyz(record, n_points=360)
             path["name"] = name
-            components.html(globe.orbit_html([path], height=600, highlight=True), height=610)
+            components.html(globe.orbit_html([path], height=600, highlight=True, autoplay=False), height=610)  # paused at "now": matches the ground track
 
         # ---- summary card (below the globe)
         with st.container(border=True):
