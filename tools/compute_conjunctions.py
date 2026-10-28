@@ -2,7 +2,7 @@
 
 Usage:  python tools/compute_conjunctions.py [--top 300] [--hours 24] [--threshold 50]
 
-Screening every object takes too long for the web app, so this runs offline on the objects with the highest
+Screening every object takes too long for the web app, so this runs offline on the active satellites with the highest
 base risk (perigee, decay, inclination, type) and stores the result in data/closest_approaches.json. Re-run it
 after tools/refresh_data.py. The window starts at the newest element epoch in the data (the snapshot time).
 """
@@ -51,7 +51,8 @@ def compute(top: int = 300, hours: float = 24.0, threshold_km: float = 50.0, wor
     comp = decay.risk_components(cat)
     base_only = {k: (v if k in decay.BASE_KEYS else 0.0) for k, v in decay.DEFAULT_WEIGHTS.items()}
     cat = cat.assign(base=decay.risk_score(comp, base_only))
-    shortlist = cat.sort_values("base", ascending=False).head(top)
+    # the watchlist lists active satellites only; they are screened against everything (satellites and debris)
+    shortlist = cat[cat["source"] == "active"].sort_values("base", ascending=False).head(top)
     ts = cat["EPOCH_DT"].max()
     jd, fr = jday(ts.year, ts.month, ts.day, ts.hour, ts.minute, ts.second + ts.microsecond / 1e6)
     jobs = [(int(r.NORAD_CAT_ID), (float(r.perigee_km), float(r.apogee_km)), jd + fr, hours, threshold_km)

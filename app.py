@@ -131,21 +131,25 @@ with tab_watch:
     n_show = c_n.number_input("Objects", 10, 200, 50, step=10)
     n_deb_total = int((df["source"] == "debris").sum())
     n_deb_show = c_d.number_input("Debris", 0, n_deb_total, 0, step=50,
-                                  help="How many debris orbits to draw on the globe, highest ranked first. 0 = hidden.")
+                                  help="Debris is not part of the watchlist; this draws that many debris orbits on the globe for context, highest ranked first. 0 = hidden.")
 
     weights = decay.DEFAULT_WEIGHTS  # fixed: not adjustable in the app
 
-    ranked = df.copy()
-    ranked["risk"] = decay.risk_score(components_df, weights)
-    if mode.startswith("Risk"):
-        ranked = ranked.sort_values("risk", ascending=False)
-    elif mode.startswith("Soonest"):
-        ranked = ranked.sort_values("decay_days", na_position="last")
-    else:
-        ranked = ranked.sort_values("perigee_km")
+    scored = df.copy()
+    scored["risk"] = decay.risk_score(components_df, weights)
+
+    def sort_by_mode(frame: pd.DataFrame) -> pd.DataFrame:
+        if mode.startswith("Risk"):
+            return frame.sort_values("risk", ascending=False)
+        if mode.startswith("Soonest"):
+            return frame.sort_values("decay_days", na_position="last")
+        return frame.sort_values("perigee_km")
+
+    sats = scored[scored["source"] == "active"]  # the watchlist covers active satellites only, not debris
+    ranked = sort_by_mode(sats)
     top = ranked.head(int(n_show))
 
-    levels = decay.traffic_light(ranked["risk"]).loc[top.index]  # level = overall risk rank, whatever is listed
+    levels = decay.traffic_light(sats["risk"]).loc[top.index]  # level = risk rank among the satellites, whatever is listed
     LEVEL_LABEL = {"red": "🔴 High", "yellow": "🟡 Medium", "green": "🟢 Low"}
     hours_txt = ["—" if pd.isna(h) else f"{h:.1f} h" for h in top["ca_hours"]]
     table = pd.DataFrame({
@@ -159,8 +163,8 @@ with tab_watch:
         "Risk score": top["risk"],
     })
     table_ids = tuple(int(i) for i in table["NORAD ID"])
-    shown = set(table_ids)
-    deb_ids = tuple(int(i) for i in ranked.loc[ranked["source"] == "debris", "NORAD_CAT_ID"] if int(i) not in shown)[:int(n_deb_show)]
+    debris_ranked = sort_by_mode(scored[scored["source"] == "debris"])
+    deb_ids = tuple(int(i) for i in debris_ranked["NORAD_CAT_ID"])[:int(n_deb_show)]  # debris only appears as globe orbits
     tier_idx = tuple({"red": 0, "yellow": 1, "green": 2}[l] for l in levels)
     components.html(globe.orbit_html(watchlist_paths(table_ids, tier_idx, tuple(float(r) for r in top["risk"])),
                                      debris=debris_orbit_paths(deb_ids)), height=660)
@@ -486,8 +490,8 @@ with st.expander("How these numbers are computed"):
         "from the snapshot time: 1 km = 1, 25 km or more = 0), relative speed 10% (km/s over 15) and time to closest approach 10% "
         "(within 6 h = 1, 24 h or more = 0); the last two only count when the miss is under 25 km. Close-approach results are precomputed "
         "for the highest-risk objects.\n"
-        "- **Colour levels:** by overall risk rank: the 10 highest-risk objects are red, the next 30 yellow, all others green "
-        "(so 50 listed objects show 10 / 30 / 10, and a list of 10 is all red).\n"
+        "- **Colour levels:** by risk rank among the active satellites: the 10 highest-risk are red, the next 30 yellow, all others green "
+        "(so 50 listed satellites show 10 / 30 / 10, and a list of 10 is all red). Debris is not on the watchlist; it can be drawn on the globe.\n"
         "- **Footprint:** latitude band ±min(i, 180−i); time per latitude from sin φ = sin i · sin u.\n"
         "- **Conjunctions:** coarse-grid SGP4 screening with 0.5 s refinement of local minima, against every satellite and debris fragment.\n"
         "- **Debris and triage:** the debris groups (TLE or CelesTrak JSON files in data/debris) are parsed into the same record format and screened with the same SGP4 conjunction code. "
