@@ -165,7 +165,7 @@ with tab_watch:
                             help="Debris is not part of the watchlist; this only draws debris orbits on the globe for context.")
     n_deb_show = 0
     if show_debris:
-        n_deb_show = st.slider("Debris orbits to draw", 50, n_deb_total, min(300, n_deb_total), step=50,
+        n_deb_show = st.slider("Debris orbits to draw", 50, n_deb_total, min(50, n_deb_total), step=50,
                                help="Highest-risk debris first.")
 
     weights = decay.DEFAULT_WEIGHTS  # fixed: not adjustable in the app
@@ -588,6 +588,24 @@ if (!P.__orbiskDrag) {
       setTimeout(() => D.removeEventListener("click", swallow, true), 300);
     }
     drag = null;
+  }, true);
+  // turning the "Show debris orbits" toggle off hides the debris in the globe straight away; the new page then
+  // arrives after the (slow) rerun and keeps it hidden
+  D.addEventListener("click", (e) => {
+    const box = e.target.closest('[data-testid="stCheckbox"], [data-testid="stToggle"]');
+    if (!box || !box.textContent.includes("Show debris orbits on globe")) return;
+    setTimeout(() => {
+      const input = box.querySelector("input");
+      if (!input || input.checked) return;
+      for (const f of D.querySelectorAll("iframe")) {
+        try {
+          for (const l of f.contentDocument.querySelectorAll("label")) {
+            const cb = l.querySelector('input[type="checkbox"]');
+            if (cb && cb.checked && /Debris orbits \\(/.test(l.textContent)) cb.click();
+          }
+        } catch (err) {}
+      }
+    }, 50);
   }, true);
   P.addEventListener("resize", () => { try { const s = JSON.parse(P.localStorage.getItem(KEY)); if (s) apply(s[0], s[1]); } catch (e) {} });
 }

@@ -64,6 +64,7 @@ def test_app_lists_and_pickers_are_satellites_only():
     assert [t.label for t in at.toggle] == ["Show debris orbits on globe"] and not [s for s in at.slider if s.label == "Debris orbits to draw"]  # slider only when toggled on
     at.toggle[0].set_value(True).run()
     assert not at.exception and [s.label for s in at.slider if s.label == "Debris orbits to draw"] == ["Debris orbits to draw"]
+    assert next(s for s in at.slider if s.label == "Debris orbits to draw").value == 50  # starts at 50
 
 
 def test_assistant_is_leo_only(world):
