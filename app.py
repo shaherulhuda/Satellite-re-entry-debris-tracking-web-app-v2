@@ -221,9 +221,6 @@ with tab_track:
         c2.metric("Longitude", f"{pos['lon']:.2f}°")
         c3.metric("Altitude", f"{pos['alt_km']:.0f} km")
         c4.metric("Perigee / Apogee", f"{row['perigee_km']:.0f} / {row['apogee_km']:.0f} km")
-        st.caption(f"Position at {pos['time']:%Y-%m-%d %H:%M:%S} UTC (now), propagated from the snapshot elements.")
-
-        st.markdown("**3D orbit** (yellow dot = position now; the animation loops until you press Pause)")
         path = orbits.orbit_path_xyz(record, n_points=360)
         path["name"] = name
         components.html(globe.orbit_html([path], height=600, highlight=True), height=610)
