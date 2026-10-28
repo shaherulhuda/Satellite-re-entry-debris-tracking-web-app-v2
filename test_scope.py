@@ -10,6 +10,8 @@ import dataset
 import decay
 import llm
 
+SEC_TRACK, SEC_TRIAGE = "📉 Re-entry Tracker", "⚠️ Conjunctions & Triage"
+
 
 @pytest.fixture(scope="module")
 def world():
@@ -55,10 +57,14 @@ def test_app_lists_and_pickers_are_satellites_only():
     full = dataset.attach_closest_approaches(cat, dataset.load_closest_approaches())
     full["risk"] = decay.risk_score(decay.risk_components(full))
     pool = full[full.source == "active"].sort_values("risk", ascending=False).head(50).NORAD_CAT_ID.astype(int).tolist()
-    for box in at.selectbox:
-        if box.label in ("Object", "Object to screen"):
-            ids = [int(re.search(r"\((\d+)\)$", o).group(1)) for o in box.options]
-            assert ids == pool and not set(ids) & deb  # same 50 satellites, highest risk first
+    for section, label in ((SEC_TRACK, "Object"), (SEC_TRIAGE, "Object to screen")):  # only the section on screen is built
+        other = AppTest.from_file("app.py", default_timeout=400)
+        other.session_state["section"] = section
+        other.run()
+        assert not other.exception
+        box = next(b for b in other.selectbox if b.label == label)
+        ids = [int(re.search(r"\((\d+)\)$", o).group(1)) for o in box.options]
+        assert ids == pool and not set(ids) & deb  # same 50 satellites, highest risk first
     assert not any("Follow a debris object" in str(r.options) for r in at.radio)  # debris is never the subject
     # debris only enters through the globe box and the screening partners
     assert [t.label for t in at.toggle] == ["Show debris orbits on globe"] and not [s for s in at.slider if s.label == "Debris orbits to draw"]  # slider only when toggled on
@@ -98,17 +104,19 @@ def test_suggested_action_rules():
 
 def test_object_page_card_subtabs_and_screen_button():
     from streamlit.testing.v1 import AppTest
-    at = AppTest.from_file("app.py", default_timeout=400).run()
+    at = AppTest.from_file("app.py", default_timeout=400)
+    at.session_state["section"] = SEC_TRACK
+    at.run()
     assert not at.exception
-    assert [t.label for t in at.tabs if t.label in ("Orbit", "Decay", "Re-entry footprint", "Risk breakdown")] == \
-        ["Orbit", "Decay", "Re-entry footprint"]
-    assert any(m.label == "Risk score" for m in at.metric)  # summary card
+    assert at.segmented_control(key="tracker_view").options == ["Orbit", "Decay", "Re-entry footprint"]
+    assert any(m.label == "Risk score" for m in at.metric)  # summary card (Orbit view)
     pick = at.selectbox(key="tracker_obj")
     target = pick.options[3]  # option strings look like "NAME (12345)"
     pick.select_index(3).run()
     assert not at.exception
     at.button(key="screen_this").click().run()
     assert not at.exception
+    assert at.session_state["section"] == SEC_TRIAGE  # moved to Conjunctions & Triage with the object selected
     assert str(at.session_state["tri_obj"]) == re.search(r"\((\d+)\)$", target).group(1)
     assert str(at.selectbox(key="tri_obj").value) == re.search(r"\((\d+)\)$", target).group(1)
 
@@ -149,7 +157,9 @@ def test_triage_cards_and_bands():
 
 def test_triage_shows_intro_then_cards_table_and_csv():
     from streamlit.testing.v1 import AppTest
-    at = AppTest.from_file("app.py", default_timeout=600).run()
+    at = AppTest.from_file("app.py", default_timeout=600)
+    at.session_state["section"] = SEC_TRIAGE
+    at.run()
     assert any(m.value == "Pick a satellite, a time window and a distance; Orbisk lists the closest passes." for m in at.markdown)
     next(b for b in at.button if b.label == "Run screening").click()
     at.run()
@@ -204,7 +214,9 @@ def test_assistant_allows_ten_questions_per_session(monkeypatch):
 
 def test_screen_this_object_runs_the_screening():
     from streamlit.testing.v1 import AppTest
-    at = AppTest.from_file("app.py", default_timeout=600).run()
+    at = AppTest.from_file("app.py", default_timeout=600)
+    at.session_state["section"] = SEC_TRACK
+    at.run()
     assert not at.exception
     assert not any("Closest passes" in m.value for m in at.markdown)  # nothing screened yet
     at.button(key="screen_this").click().run()

@@ -1,7 +1,6 @@
 """Re-Entry & Debris Mitigation Assistant (Streamlit UI). Physics lives in the other modules."""
 import base64
 import html
-import json
 import os
 import urllib.parse
 from pathlib import Path
@@ -115,6 +114,18 @@ iframe { border-radius: 14px; }
 [role="tabpanel"] [role="tablist"] [data-testid="stTab"] { padding: .25rem .8rem; }
 [role="tabpanel"] [role="tablist"] [data-testid="stTab"] p { font-size: .85rem; }
 
+/* section switcher (segmented control) drawn as pills, like the tabs: orange glow on the selected one; the tracker's view switch is smaller */
+[data-testid="stButtonGroup"] [role="radiogroup"] { gap: .4rem; background: transparent !important; border: 0 !important; padding: 0 !important; }
+[data-testid="stButtonGroup"] button[role="radio"] { border-radius: 999px !important; padding: .4rem 1.05rem; background: rgba(255, 255, 255, .04) !important;
+    border: 1px solid rgba(255, 255, 255, .08) !important; transition: background .2s, box-shadow .2s, border-color .2s; }
+[data-testid="stButtonGroup"] button[role="radio"]:hover { background: rgba(79, 209, 224, .12) !important; border-color: rgba(79, 209, 224, .35) !important; }
+[data-testid="stButtonGroup"] button[role="radio"][data-selected="true"] { background: rgba(255, 122, 61, .14) !important;
+    border-color: rgba(255, 122, 61, .6) !important; box-shadow: 0 0 18px rgba(255, 122, 61, .35), 0 2px 0 #FF7A3D; }
+[data-testid="stButtonGroup"] button[role="radio"][data-selected="true"] p { color: #fff; font-weight: 600; }
+.st-key-tracker_view button[role="radio"] { padding: .25rem .8rem; }
+.st-key-tracker_view button[role="radio"] p { font-size: .85rem; }
+.st-key-section { margin-bottom: .4rem; }
+
 /* scrollbars and tooltips */
 * { scrollbar-width: thin; scrollbar-color: rgba(79, 209, 224, .5) transparent; }
 ::-webkit-scrollbar { width: 10px; height: 10px; background: transparent; }
@@ -187,7 +198,8 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-tab_watch, tab_track, tab_triage = st.tabs(["🛰️ Watchlist", "📉 Re-entry Tracker", "⚠️ Conjunctions & Triage"])
+SEC_WATCH, SEC_TRACK, SEC_TRIAGE = "🛰️ Watchlist", "📉 Re-entry Tracker", "⚠️ Conjunctions & Triage"
+VIEW_ORBIT, VIEW_DECAY, VIEW_FOOT = "Orbit", "Decay", "Re-entry footprint"
 
 
 @st.cache_data(ttl=300)
@@ -207,6 +219,40 @@ def watchlist_paths(norad_ids: tuple, tiers: tuple = (), risks: tuple = ()):
             p["hover"] += f"<br>risk {risks[k]:.0f}"
         out.append(p)
     return out
+
+
+@st.cache_data(ttl=300, max_entries=12)
+def watchlist_globe_html(norad_ids: tuple, tiers: tuple, risks: tuple, debris_ids: tuple) -> str:
+    """The finished watchlist globe: rebuilt only when the objects shown change."""
+    return globe.orbit_html(watchlist_paths(norad_ids, tiers, risks), debris=debris_orbit_paths(debris_ids))
+
+
+def now_key() -> str:
+    """The current UTC minute. The tracker's globe, position and ground track all use it, so they agree."""
+    return pd.Timestamp.now("UTC").floor("min").strftime("%Y-%m-%d %H:%M")
+
+
+def _minute(key: str):
+    return orbits.TS.utc(*pd.Timestamp(key).timetuple()[:5])
+
+
+@st.cache_data(ttl=300, max_entries=24)
+def tracker_geometry(norad: int, when: str):
+    """(position, 3-orbit ground track) at `when`, or the error text if the object cannot be propagated."""
+    try:
+        t0 = _minute(when)
+        return orbits.current_position(records[int(norad)], when=t0), orbits.ground_track(records[int(norad)], n_orbits=3, start=t0), None
+    except Exception as exc:  # e.g. decayed / bad elements
+        return None, None, str(exc)
+
+
+@st.cache_data(ttl=300, max_entries=12)
+def tracker_globe_html(norad: int, when: str) -> str:
+    """The tracker globe for one object, starting paused at `when`; rebuilt only for a new object or minute."""
+    rec = records[int(norad)]
+    path = orbits.orbit_path_xyz(rec, n_points=360, start=_minute(when))
+    path["name"] = rec["OBJECT_NAME"]
+    return globe.orbit_html([path], height=600, highlight=True)
 
 
 @st.cache_data(ttl=300)
@@ -270,35 +316,64 @@ def start_time(mode: str):
     return jd + fr, ts
 
 
+def sticky(widget, key: str, *args, **kwargs):
+    """Create a widget whose value survives while its section is off screen (Streamlit forgets widgets that are not drawn)."""
+    mem = st.session_state.setdefault("_mem", {})
+    if key not in st.session_state and key in mem:
+        st.session_state[key] = mem[key]
+        kwargs.pop("value", None), kwargs.pop("index", None), kwargs.pop("default", None)  # the remembered value wins
+    value = widget(*args, key=key, **kwargs)
+    mem[key] = value
+    return value
+
+
+def go_to(section: str, **picks):
+    """Open another section with a few widget values preset, then rerun the whole app. Call from a button handler."""
+    st.session_state["_goto"] = section
+    st.session_state.setdefault("_picks", {})[section] = picks
+    st.rerun()
+
+
+# data shared by every section
+weights = decay.DEFAULT_WEIGHTS  # fixed: not adjustable in the app
+scored = df.copy()
+scored["risk"] = decay.risk_score(components_df, weights)
+sats = scored[(scored["source"] == "active") & scored["leo"]]  # active LEO satellites only (not debris, not GEO/MEO)
+# the same 50 highest-risk active satellites everywhere (watchlist pool, tracker and screening pickers), highest risk first
+ids = sats.sort_values("risk", ascending=False).head(WATCHLIST_SIZE)["NORAD_CAT_ID"].astype(int).tolist()
+default = 0
+
+# one section at a time: only the section on screen is built (a tab bar would build all three on every click)
+if "_goto" in st.session_state:
+    st.session_state["section"] = st.session_state.pop("_goto")
+section = st.segmented_control("Section", [SEC_WATCH, SEC_TRACK, SEC_TRIAGE], key="section", default=SEC_WATCH, required=True,
+                               label_visibility="collapsed")
+
+
 # ---------------------------------------------------------------- Watchlist
-with tab_watch:
+@st.fragment
+def watchlist_view():
     st.subheader("Watchlist")
     c_mode, c_n = st.columns([3, 1])
-    mode = c_mode.selectbox("Rank by", ["Risk score: highest first", "Risk score: lowest first",
-                                      "Soonest estimated re-entry"],
-                            help="The watchlist draws on the 50 highest-risk active satellites; this orders them and the first "
-                                 "'Objects' of that order are shown.")
-    n_show = c_n.number_input("Objects", 10, WATCHLIST_SIZE, 10, step=10,
-                              help="How many to show: the first N of the 50 highest-risk satellites in the chosen order.")
+    mode = sticky(c_mode.selectbox, "w_mode", "Rank by", ["Risk score: highest first", "Risk score: lowest first",
+                                                          "Soonest estimated re-entry"],
+                  help="The watchlist draws on the 50 highest-risk active satellites; this orders them and the first "
+                       "'Objects' of that order are shown.")
+    n_show = sticky(c_n.number_input, "w_n", "Objects", min_value=10, max_value=WATCHLIST_SIZE, value=10, step=10,
+                    help="How many to show: the first N of the 50 highest-risk satellites in the chosen order.")
     n_deb_total = int((df["source"] == "debris").sum())
-    show_debris = st.toggle("Show debris orbits on globe", value=False,
-                            help="Debris is not part of the watchlist; this only draws debris orbits on the globe for context.")
+    show_debris = sticky(st.toggle, "w_debris", "Show debris orbits on globe", value=False,
+                         help="Debris is not part of the watchlist; this only draws debris orbits on the globe for context.")
     n_deb_show = 0
     if show_debris:
-        n_deb_show = st.slider("Debris orbits to draw", 50, n_deb_total, min(50, n_deb_total), step=50,
-                               help="Highest-risk debris first.")
-
-    weights = decay.DEFAULT_WEIGHTS  # fixed: not adjustable in the app
-
-    scored = df.copy()
-    scored["risk"] = decay.risk_score(components_df, weights)
+        n_deb_show = sticky(st.slider, "w_deb_n", "Debris orbits to draw", min_value=50, max_value=n_deb_total,
+                            value=min(50, n_deb_total), step=50, help="Highest-risk debris first.")
 
     def sort_by_mode(frame: pd.DataFrame) -> pd.DataFrame:
         if mode.startswith("Risk"):
             return frame.sort_values("risk", ascending=mode.endswith("lowest first"))
         return frame.sort_values("decay_days", na_position="last")  # soonest estimated re-entry
 
-    sats = scored[(scored["source"] == "active") & scored["leo"]]  # active LEO satellites only (not debris, not GEO/MEO)
     # the pool is always the WATCHLIST_SIZE highest-risk satellites; the order option sorts them and Objects shows the first N
     top = sort_by_mode(sats.sort_values("risk", ascending=False).head(WATCHLIST_SIZE)).head(int(n_show))
 
@@ -319,8 +394,6 @@ with tab_watch:
     debris_ranked = scored[scored["source"] == "debris"].sort_values("risk", ascending=False)
     deb_ids = tuple(int(i) for i in debris_ranked["NORAD_CAT_ID"])[:int(n_deb_show)]  # debris only appears as globe orbits
     tier_idx = tuple({"red": 0, "yellow": 1, "green": 2}[l] for l in levels)
-    components.html(globe.orbit_html(watchlist_paths(table_ids, tier_idx, tuple(float(r) for r in top["risk"])),
-                                     debris=debris_orbit_paths(deb_ids)), height=660)
     bar_hex = {"red": "#e5484d", "yellow": "#e0a800", "green": "#30a46c"}
 
     def risk_bar(score: float, level: str) -> str:
@@ -348,7 +421,6 @@ with tab_watch:
         },
     )
     # clicking a row (any cell, or its tick box) offers two next steps for that satellite
-    switch_targets = []  # tab names to open once this run is done, outermost tab first
     picked = list(event.selection.rows) or [c[0] if isinstance(c, (tuple, list)) else c.get("row") for c in event.selection.cells]
     picked_id = table_ids[picked[0]] if picked and picked[0] < len(table_ids) else None
     if picked_id is not None:
@@ -361,12 +433,9 @@ with tab_watch:
         if go_foot or go_screen:
             st.session_state["_watch_gen"] = st.session_state.get("_watch_gen", 0) + 1  # fresh table next run: clear the selection
             if go_foot:
-                st.session_state["tracker_obj"] = picked_id
-                switch_targets = ["Re-entry Tracker", "Re-entry footprint"]
+                go_to(SEC_TRACK, obj=picked_id, view=VIEW_FOOT)
             else:
-                st.session_state["tri_obj"] = picked_id
-                st.session_state["_auto_screen"] = True
-                switch_targets = ["Conjunctions & Triage"]
+                go_to(SEC_TRIAGE, obj=picked_id, auto=True)
     st.download_button("Download CSV", data=table.assign(**{"NORAD ID": top["NORAD_CAT_ID"].astype(int)})
                        .assign(Level=levels.map({"red": "High", "yellow": "Medium", "green": "Low"}))
                        .to_csv(index=False).encode("utf-8"),
@@ -374,29 +443,28 @@ with tab_watch:
     if ca_meta is None or not top["ca_screened"].all():
         st.caption("Close-approach columns are filled for the highest-risk objects only (`tools/compute_conjunctions.py`); "
                    "— means not screened or no approach within the threshold.")
+    # the globe comes last: the controls and the table are usable while it is still loading
+    components.html(watchlist_globe_html(table_ids, tier_idx, tuple(float(r) for r in top["risk"]), deb_ids), height=660)
 
 # ---------------------------------------------------------------- Tracker
-with tab_track:
-    # the same 50 highest-risk active satellites as the watchlist pool, highest risk first
-    ids = sats.sort_values("risk", ascending=False).head(WATCHLIST_SIZE)["NORAD_CAT_ID"].astype(int).tolist()
-    default = 0
-    norad = st.selectbox("Object", ids, format_func=label, key="tracker_obj")
+@st.fragment
+def tracker_view():
+    picks = st.session_state.get("_picks", {}).pop(SEC_TRACK, None)  # set by "Ground re-entry footprint" in the watchlist
+    if picks:
+        st.session_state["tracker_obj"] = picks["obj"]
+        st.session_state["tracker_view"] = picks.get("view", VIEW_ORBIT)
+    norad = sticky(st.selectbox, "tracker_obj", "Object", ids, format_func=label)
     row = sats[sats["NORAD_CAT_ID"] == norad].iloc[0]
     record = records[int(norad)]
     name = record["OBJECT_NAME"]
     level = decay.traffic_light(sats["risk"]).loc[row.name]
 
-    t_orbit, t_decay, t_foot = st.tabs(["Orbit", "Decay", "Re-entry footprint"])
+    view = sticky(st.segmented_control, "tracker_view", "View", [VIEW_ORBIT, VIEW_DECAY, VIEW_FOOT], default=VIEW_ORBIT,
+                  required=True, label_visibility="collapsed")
+    when = now_key()  # globe, position and ground track share this minute, so their dots agree
+    pos, track, propagate_error = tracker_geometry(int(norad), when)
 
-    try:
-        pos = orbits.current_position(record)
-        track = orbits.ground_track(record, n_orbits=3)
-        propagate_error = None
-    except Exception as exc:  # e.g. decayed / bad elements
-        pos = track = None
-        propagate_error = exc
-
-    with t_orbit:
+    if view == VIEW_ORBIT:
         if propagate_error is not None:
             st.error(f"Could not propagate {name}: {propagate_error}")
         else:
@@ -405,9 +473,7 @@ with tab_track:
             c2.metric("Longitude", f"{pos['lon']:.2f}°")
             c3.metric("Altitude", f"{pos['alt_km']:.0f} km")
             c4.metric("Perigee / Apogee", f"{row['perigee_km']:.0f} / {row['apogee_km']:.0f} km")
-            path = orbits.orbit_path_xyz(record, n_points=360)
-            path["name"] = name
-            components.html(globe.orbit_html([path], height=600, highlight=True), height=610)  # starts paused at "now": matches the ground track
+            components.html(tracker_globe_html(int(norad), when), height=610)  # starts paused at "now": matches the ground track
 
         # ---- summary card (below the globe)
         with st.container(border=True, key="summary_card"):
@@ -428,11 +494,9 @@ with tab_track:
                 s4.metric("Closest approach", "—", help="Not screened, or no approach inside the threshold.")
             if st.button("Screen this object", key="screen_this", type="primary",
                          help="Opens Conjunctions & Triage and screens this object for close approaches."):
-                st.session_state["tri_obj"] = int(norad)
-                st.session_state["_auto_screen"] = True
-                switch_targets = ["Conjunctions & Triage"]
+                go_to(SEC_TRIAGE, obj=int(norad), auto=True)
 
-    with t_decay:
+    elif view == VIEW_DECAY:
         h0 = float(decay.mean_altitude_km(row["MEAN_MOTION"]))
         d1, d2, d3, d4 = st.columns(4)
         d1.metric("Est. time to re-entry", decay.format_days(row["decay_days"]))
@@ -446,7 +510,7 @@ with tab_track:
                    "not a re-entry prediction; it cannot anticipate solar activity changes or manoeuvres.")
         st.plotly_chart(charts.decay_figure(h0, float(row["decay_km_day"]), h_obj), width="stretch")
 
-    with t_foot:
+    else:
         f1, f2 = st.columns(2)
         f1.metric("Latitudes overflown", f"±{footprint.max_latitude(row['INCLINATION']):.1f}°")
         f2.metric("Share of Earth's surface", f"{footprint.surface_fraction(row['INCLINATION']) * 100:.0f}%")
@@ -520,18 +584,23 @@ EVENT_CONFIG = {
 }
 
 
-with tab_triage:
+@st.fragment
+def triage_view():
+    picks = st.session_state.get("_picks", {}).pop(SEC_TRIAGE, None)  # set by "Screen this object" / "Screen for close approaches"
+    if picks:
+        st.session_state["tri_obj"] = picks["obj"]
+    auto = bool(picks and picks.get("auto"))  # those buttons run the screening straight away
     st.subheader("Conjunctions & triage")
     st.markdown("Pick a satellite, a time window and a distance; Orbisk lists the closest passes.")
     asset_ids = ids  # the 50 highest-risk active satellites, same as the watchlist
     with st.form("tri_asset_form"):
         a1, a2, a3 = st.columns([3, 1, 1])
-        asset = a1.selectbox("Object to screen", asset_ids, format_func=label, key="tri_obj")
-        days = a2.slider("Window (days)", 1, 30, 2)
+        asset = sticky(a1.selectbox, "tri_obj", "Object to screen", asset_ids, format_func=label)
+        days = sticky(a2.slider, "tri_days", "Window (days)", min_value=1, max_value=30, value=2)
         hours = days * 24
-        thr = a3.slider("Report within (km)", 1, 100, 25)
+        thr = sticky(a3.slider, "tri_thr", "Report within (km)", min_value=1, max_value=100, value=25)
         run = st.form_submit_button("Run screening", type="primary")
-    if run or st.session_state.pop("_auto_screen", False):  # "Screen this object" / "Screen for close approaches" run it straight away
+    if run or auto:
         jd0, ts0 = start_time("Snapshot time")
         with st.spinner("Propagating candidates…"):
             try:
@@ -581,104 +650,118 @@ with tab_triage:
             st.download_button("Download CSV", data=table_ev.to_csv(index=False).encode("utf-8"),
                                file_name=f"orbisk_conjunctions_{res['asset']}.csv", mime="text/csv", key="tri_csv")
 
+# only the section on screen is built
+if section == SEC_WATCH:
+    watchlist_view()
+elif section == SEC_TRACK:
+    tracker_view()
+else:
+    triage_view()
+
+
 # floating chat launcher (styles are in the CSS block at the top); the popover opens downward and closes with the same button
-with st.container(key="ai_fab"):
-    with st.popover("Ask Orbisk AI"):
-        st.caption("Optional. The app is fully offline without this. When you add an Anthropic API key the assistant can "
-                   "explain results in plain language. It never calculates orbits: it only sees numbers this app computed, "
-                   "or looks data up through the app's own functions.")
-        pasted = (st.text_input("Anthropic API key", type="password", key="pasted_key",
-                                help="Kept only in this browser session; not stored or logged.") or "").strip()
-        configured = (_secret("ANTHROPIC_API_KEY") or "").strip()
-        api_key = pasted or configured
-        key_from_config = bool(configured) and not pasted
+@st.fragment
+def assistant_view():
+    with st.container(key="ai_fab"):
+        with st.popover("Ask Orbisk AI"):
+            st.caption("Optional. The app is fully offline without this. When you add an Anthropic API key the assistant can "
+                       "explain results in plain language. It never calculates orbits: it only sees numbers this app computed, "
+                       "or looks data up through the app's own functions.")
+            pasted = (st.text_input("Anthropic API key", type="password", key="pasted_key",
+                                    help="Kept only in this browser session; not stored or logged.") or "").strip()
+            configured = (_secret("ANTHROPIC_API_KEY") or "").strip()
+            api_key = pasted or configured
+            key_from_config = bool(configured) and not pasted
 
-        if not api_key:
-            st.info("AI features are off. Paste a key above, or set `ANTHROPIC_API_KEY` as an environment variable or in "
-                    "Streamlit secrets. Everything else in the app works without it.")
-        else:
-            allowed = True
-            if key_from_config:
-                gate = _secret("ASSISTANT_PASSWORD")
-                if gate:
-                    allowed = st.text_input("Access code", type="password", key="ai_gate") == gate
-                    if not allowed:
-                        st.warning("Enter the access code to use the assistant.")
-                else:
-                    st.warning("This deployment uses a key from its configuration, so anyone with the link can spend it. "
-                               "Set `ASSISTANT_PASSWORD` to require an access code.")
-            if allowed:
-                max_req = int(_secret("ASSISTANT_MAX_REQUESTS") or ASSISTANT_DEFAULT_MAX)
-                used = st.session_state.setdefault("ai_requests", 0)
-                model = st.selectbox("Model", list(llm.MODELS), format_func=llm.MODELS.get, key="ai_model")
-                st.caption(f"{used}/{max_req} questions used in this session.")
-                ctx = llm.DataContext(df, records, components_df, weights, hist_all)
+            if not api_key:
+                st.info("AI features are off. Paste a key above, or set `ANTHROPIC_API_KEY` as an environment variable or in "
+                        "Streamlit secrets. Everything else in the app works without it.")
+            else:
+                allowed = True
+                if key_from_config:
+                    gate = _secret("ASSISTANT_PASSWORD")
+                    if gate:
+                        allowed = st.text_input("Access code", type="password", key="ai_gate") == gate
+                        if not allowed:
+                            st.warning("Enter the access code to use the assistant.")
+                    else:
+                        st.warning("This deployment uses a key from its configuration, so anyone with the link can spend it. "
+                                   "Set `ASSISTANT_PASSWORD` to require an access code.")
+                if allowed:
+                    max_req = int(_secret("ASSISTANT_MAX_REQUESTS") or ASSISTANT_DEFAULT_MAX)
+                    used = st.session_state.setdefault("ai_requests", 0)
+                    model = st.selectbox("Model", list(llm.MODELS), format_func=llm.MODELS.get, key="ai_model")
+                    st.caption(f"{used}/{max_req} questions used in this session.")
+                    ctx = llm.DataContext(df, records, components_df, weights, hist_all)
 
-                guarded = ai_guarded
+                    guarded = ai_guarded
 
-                t_chat, t_brief, t_risk, t_rec = st.tabs(["Ask the data", "Object briefing", "Risk explanation", "Recommended action"])
-                for tab, kind, task, button in ((t_brief, "brief", llm.BRIEFING_TASK, "Generate briefing"),
-                                                (t_risk, "risk", llm.RISK_TASK, "Explain risk score"),
-                                                (t_rec, "rec", llm.RECOMMEND_TASK, "Recommend next steps")):
-                    with tab:
-                        pick = st.selectbox("Object", ids, index=default, format_func=label, key=f"ai_pick_{kind}")
-                        facts = llm.object_facts(ctx, int(pick))
-                        if st.button(button, key=f"ai_go_{kind}"):
-                            with st.spinner("Asking the model…"):
-                                res = guarded(lambda c: llm.explain(c, model, facts, task))
-                            if res:
-                                st.session_state[f"ai_out_{kind}"] = (pick, res)
-                        saved = st.session_state.get(f"ai_out_{kind}")
-                        if saved and saved[0] == pick:
-                            st.markdown(saved[1][0])
-                            st.caption(f"{saved[1][1]['input_tokens']} input / {saved[1][1]['output_tokens']} output tokens")
-                        with st.expander("Facts sent to the model (computed by this app)"):
-                            st.json(facts)
+                    t_chat, t_brief, t_risk, t_rec = st.tabs(["Ask the data", "Object briefing", "Risk explanation", "Recommended action"])
+                    for tab, kind, task, button in ((t_brief, "brief", llm.BRIEFING_TASK, "Generate briefing"),
+                                                    (t_risk, "risk", llm.RISK_TASK, "Explain risk score"),
+                                                    (t_rec, "rec", llm.RECOMMEND_TASK, "Recommend next steps")):
+                        with tab:
+                            pick = st.selectbox("Object", ids, index=default, format_func=label, key=f"ai_pick_{kind}")
+                            facts = llm.object_facts(ctx, int(pick))
+                            if st.button(button, key=f"ai_go_{kind}"):
+                                with st.spinner("Asking the model…"):
+                                    res = guarded(lambda c: llm.explain(c, model, facts, task))
+                                if res:
+                                    st.session_state[f"ai_out_{kind}"] = (pick, res)
+                            saved = st.session_state.get(f"ai_out_{kind}")
+                            if saved and saved[0] == pick:
+                                st.markdown(saved[1][0])
+                                st.caption(f"{saved[1][1]['input_tokens']} input / {saved[1][1]['output_tokens']} output tokens")
+                            with st.expander("Facts sent to the model (computed by this app)"):
+                                st.json(facts)
 
-                with t_chat:
-                    st.caption("Examples: *Which red satellites have the closest approaches?* · *Why is STARLINK-1433 ranked so high?* · "
-                               "*What should we do about the ISS?* · *How is the risk score calculated?*")
-                    chat_hist = st.session_state.setdefault("ai_chat", [])
-                    for m in chat_hist:
-                        with st.chat_message(m["role"]):
-                            st.markdown(m["content"])
-                            if m.get("trace"):
-                                st.caption("Looked up: " + ", ".join(f"{t['tool']}({t['input']})" for t in m["trace"]))
-                    top_sat = sats.sort_values("risk", ascending=False).iloc[0]
-                    suggestions = {  # button label -> question sent to the assistant
-                        "Why is this object ranked first?": f"Why is {top_sat['OBJECT_NAME']} (NORAD {int(top_sat['NORAD_CAT_ID'])}) "
-                                                           "ranked first by risk score?",
-                        "Which satellites re-enter soonest?": "Which satellites have the soonest estimated re-entry?",
-                        "What is perigee and apogee?": "What are perigee and apogee, and why do they matter for re-entry?",
-                    }
-                    asked = None
-                    holder = st.empty()
-                    if not chat_hist:
-                        with holder.container():
-                            for i, (label_, question) in enumerate(suggestions.items()):
-                                if st.button(label_, key=f"ai_suggest_{i}", width="stretch"):
-                                    asked = question
-                        if asked:
-                            holder.empty()  # the chat has started: drop the suggestions
-                    q = st.chat_input("Ask about the catalogue…") or asked
-                    if q:
-                        with st.chat_message("user"):
-                            st.markdown(q)
-                        with st.chat_message("assistant"):
-                            with st.spinner("Working…"):
-                                plain = [{"role": m["role"], "content": m["content"]} for m in chat_hist]
-                                res = guarded(lambda c: llm.chat(c, model, ctx, plain, q))
-                            if res:
-                                answer, trace, usage = res
-                                st.markdown(answer)
-                                if trace:
-                                    st.caption("Looked up: " + ", ".join(f"{t['tool']}({t['input']})" for t in trace))
-                                st.caption(f"{usage['input_tokens']} input / {usage['output_tokens']} output tokens")
-                                chat_hist += [{"role": "user", "content": q},
-                                              {"role": "assistant", "content": answer, "trace": trace}]
-                    if chat_hist and st.button("Clear chat"):
-                        st.session_state["ai_chat"] = []
-                        st.rerun()
+                    with t_chat:
+                        st.caption("Examples: *Which red satellites have the closest approaches?* · *Why is STARLINK-1433 ranked so high?* · "
+                                   "*What should we do about the ISS?* · *How is the risk score calculated?*")
+                        chat_hist = st.session_state.setdefault("ai_chat", [])
+                        for m in chat_hist:
+                            with st.chat_message(m["role"]):
+                                st.markdown(m["content"])
+                                if m.get("trace"):
+                                    st.caption("Looked up: " + ", ".join(f"{t['tool']}({t['input']})" for t in m["trace"]))
+                        top_sat = sats.sort_values("risk", ascending=False).iloc[0]
+                        suggestions = {  # button label -> question sent to the assistant
+                            "Why is this object ranked first?": f"Why is {top_sat['OBJECT_NAME']} (NORAD {int(top_sat['NORAD_CAT_ID'])}) "
+                                                               "ranked first by risk score?",
+                            "Which satellites re-enter soonest?": "Which satellites have the soonest estimated re-entry?",
+                            "What is perigee and apogee?": "What are perigee and apogee, and why do they matter for re-entry?",
+                        }
+                        asked = None
+                        holder = st.empty()
+                        if not chat_hist:
+                            with holder.container():
+                                for i, (label_, question) in enumerate(suggestions.items()):
+                                    if st.button(label_, key=f"ai_suggest_{i}", width="stretch"):
+                                        asked = question
+                            if asked:
+                                holder.empty()  # the chat has started: drop the suggestions
+                        q = st.chat_input("Ask about the catalogue…") or asked
+                        if q:
+                            with st.chat_message("user"):
+                                st.markdown(q)
+                            with st.chat_message("assistant"):
+                                with st.spinner("Working…"):
+                                    plain = [{"role": m["role"], "content": m["content"]} for m in chat_hist]
+                                    res = guarded(lambda c: llm.chat(c, model, ctx, plain, q))
+                                if res:
+                                    answer, trace, usage = res
+                                    st.markdown(answer)
+                                    if trace:
+                                        st.caption("Looked up: " + ", ".join(f"{t['tool']}({t['input']})" for t in trace))
+                                    st.caption(f"{usage['input_tokens']} input / {usage['output_tokens']} output tokens")
+                                    chat_hist += [{"role": "user", "content": q},
+                                                  {"role": "assistant", "content": answer, "trace": trace}]
+                        if chat_hist and st.button("Clear chat"):
+                            st.session_state["ai_chat"] = []
+                            st.rerun(scope="fragment")
+
+
+assistant_view()
 
 with st.expander("How these numbers are computed"):
     st.markdown(
@@ -789,18 +872,3 @@ if (!P.__orbiskDrag) {
   P.addEventListener("resize", () => { restore(); setTimeout(rescue, 300); });
 }
 </script>""", height=0)
-
-if switch_targets:  # jump to the chosen tab(s) (Streamlit has no API for this, so click the tab headers once the run is done)
-    components.html("""<script>
-    const D = window.parent.document, names = __TARGETS__;
-    let tries = 0;
-    const clickTab = (name) => { for (const t of D.querySelectorAll('[role="tab"]')) { if (t.textContent.includes(name)) { t.click(); return; } } };
-    const go = setInterval(() => {
-      tries += 1;
-      const busy = D.querySelector('[data-testid="stStatusWidget"]');
-      if (!busy || tries > 150) {
-        clearInterval(go);
-        names.forEach((n, i) => setTimeout(() => clickTab(n), i * 250));
-      }
-    }, 100);
-    </script>""".replace("__TARGETS__", json.dumps(switch_targets)), height=0)

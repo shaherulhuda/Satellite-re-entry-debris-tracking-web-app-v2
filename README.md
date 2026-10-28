@@ -52,3 +52,14 @@ coloured by overall risk rank: the 10 highest-risk active satellites are red, th
 
 Screening every object would be too slow for the web app, so `tools/compute_conjunctions.py` precomputes the closest approach for
 the highest-risk objects (default 300) into `data/closest_approaches.json`. Re-run it after `tools/refresh_data.py`.
+
+
+## Speed notes
+
+- **Plotly is shared.** Every globe loads one copy of Plotly from `static/plotly.min.js` (served because `.streamlit/config.toml` sets
+  `enableStaticServing`), which the browser caches. If that file cannot be served, the same version is fetched from the Plotly CDN.
+  `test_debris_globe.py` checks the file matches the pinned `plotly` version, so update it when you bump Plotly:
+  `cp $(python -c "import plotly,os;print(os.path.dirname(plotly.__file__))")/package_data/plotly.min.js static/`.
+- **One section at a time.** The Watchlist, Re-entry Tracker and Conjunctions & Triage sections are separate fragments; only the one on
+  screen is built, and interacting inside it reruns just that fragment. The assistant is its own fragment too.
+- Finished globes are cached for 5 minutes per set of objects.
