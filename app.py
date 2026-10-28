@@ -132,31 +132,7 @@ with tab_watch:
     n_deb_show = c_d.number_input("Debris", 0, n_deb_total, 0, step=50,
                                   help="How many debris orbits to draw on the globe, highest ranked first. 0 = hidden.")
 
-    with st.expander("Risk score: formula and weights"):
-        st.markdown(
-            "**risk = 100 × Σ(wᵢ·termᵢ) / Σw**, each term scaled 0–1:\n"
-            "- **perigee** = (700 − perigee km) / 550, clipped (150 km → 1, ≥ 700 km → 0)\n"
-            "- **decay** = how soon re-entry is estimated: 1 at ≤ 10 days, 0 at ≥ 10 years (log scale); 0 if no measurable decay\n"
-            "- **inclination** = share of Earth's surface the orbit can overfly, sin(max latitude)\n"
-            "- **type** = debris 1.0, rocket body 0.8, payload 0.3 (guessed from the catalogue name; "
-            "uncontrolled objects cannot be steered away)\n"
-            "- **miss distance** = closest approach to any satellite or debris in the next 24 h: 1 at ≤ 1 km, 0 at ≥ 25 km (log scale)\n"
-            "- **relative speed** = closing speed at that approach ÷ 15 km/s (only counted when the miss is under 25 km)\n"
-            "- **time to closest approach** = 1 within 6 h, falling to 0 at 24 h (only counted when the miss is under 25 km)\n\n"
-            "Colour levels: of the objects listed, the top 20% by risk are 🔴 red, the next 60% 🟡 yellow and the last 20% 🟢 green "
-            "(10 / 30 / 10 for 50 objects). Change the weights below; the ranking updates."
-        )
-        w1, w2, w3, w4 = st.columns(4)
-        w5, w6, w7, _ = st.columns(4)
-        weights = {
-            "perigee": w1.slider("Perigee", 0.0, 1.0, decay.DEFAULT_WEIGHTS["perigee"], 0.05),
-            "decay": w2.slider("Decay", 0.0, 1.0, decay.DEFAULT_WEIGHTS["decay"], 0.05),
-            "inclination": w3.slider("Inclination", 0.0, 1.0, decay.DEFAULT_WEIGHTS["inclination"], 0.05),
-            "type": w4.slider("Type", 0.0, 1.0, decay.DEFAULT_WEIGHTS["type"], 0.05),
-            "miss": w5.slider("Miss distance", 0.0, 1.0, decay.DEFAULT_WEIGHTS["miss"], 0.05),
-            "speed": w6.slider("Relative speed", 0.0, 1.0, decay.DEFAULT_WEIGHTS["speed"], 0.05),
-            "time": w7.slider("Time to approach", 0.0, 1.0, decay.DEFAULT_WEIGHTS["time"], 0.05),
-        }
+    weights = decay.DEFAULT_WEIGHTS  # fixed: not adjustable in the app
 
     ranked = df.copy()
     ranked["risk"] = decay.risk_score(components_df, weights)
@@ -490,9 +466,13 @@ with st.expander("How these numbers are computed"):
         "- **Decay estimate:** the measured `MEAN_MOTION_DOT` (×2, since the field is ṅ/2) gives da/dt = −(2/3)·a·ṅ/n. "
         "That rate is scaled by air density (exponential atmosphere table) and integrated down to 120 km. "
         "Requires positive `BSTAR` (drag term). Uncertainty is at least a factor of 2.\n"
-        "- **Risk score:** weighted blend of perigee, decay time, inclination, object type, and the closest approach to any satellite or debris "
-        "(miss distance, relative speed, time to it) over 24 h from the snapshot time; weights are adjustable on the Watchlist. "
-        "Close-approach results are precomputed for the highest-risk objects.\n"
+        "- **Risk score (0-100):** fixed weighted blend of seven terms scaled 0-1: perigee 20% (150 km = 1, 700 km or more = 0), "
+        "decay time 20% (10 days or less = 1, 10 years or more = 0), inclination 10% (share of Earth's surface overflown), "
+        "object type 5% (debris 1.0, rocket body 0.8, payload 0.3), miss distance 25% (closest approach to any satellite or debris in 24 h "
+        "from the snapshot time: 1 km = 1, 25 km or more = 0), relative speed 10% (km/s over 15) and time to closest approach 10% "
+        "(within 6 h = 1, 24 h or more = 0); the last two only count when the miss is under 25 km. Close-approach results are precomputed "
+        "for the highest-risk objects.\n"
+        "- **Colour levels:** of the objects listed, the top 20% by risk are red, the next 60% yellow and the last 20% green (10 / 30 / 10 for 50 objects).\n"
         "- **Footprint:** latitude band ±min(i, 180−i); time per latitude from sin φ = sin i · sin u.\n"
         "- **Conjunctions:** coarse-grid SGP4 screening with 0.5 s refinement of local minima, against every satellite and debris fragment.\n"
         "- **Debris and triage:** the debris groups (TLE or CelesTrak JSON files in data/debris) are parsed into the same record format and screened with the same SGP4 conjunction code. "
