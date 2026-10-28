@@ -458,6 +458,8 @@ st.markdown(
         background: url(__ICON__) center / cover no-repeat; box-shadow: 0 2px 10px rgba(0,0,0,.35); }
     .st-key-ai_fab button > * { display: none; }
     .st-key-ai_fab { touch-action: none; cursor: grab; }
+    /* tables are read-only: hide the cell pop-up box that would otherwise linger while a clicked row opens the tracker */
+    [class*="gdg-"]:has(> .gdg-clip-region) { display: none !important; }
     /* one size scale: headings 1.35rem, numbers 1.5rem, labels and card detail 0.85-0.9rem */
     h3 { font-size: 1.35rem !important; }
     h4 { font-size: 1.2rem !important; }
