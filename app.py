@@ -242,10 +242,6 @@ with tab_track:
     st.caption(f"Status: **{row['decay_status']}**. This is a rough estimate (typically good to a factor of 2 or worse), "
                "not a re-entry prediction; it cannot anticipate solar activity changes or manoeuvres.")
     st.plotly_chart(charts.decay_figure(h0, float(row["decay_km_day"]), h_obj), width="stretch")
-    if len(h_obj) < 2:
-        st.caption("Perigee history builds up as snapshots are added: replace `active.json` with fresh data and run "
-                   "`python tools/add_snapshot.py`. Only objects with perigee ≤ "
-                   f"{history.DEFAULT_MAX_PERIGEE_KM:.0f} km are recorded.")
 
     # ---- footprint
     st.subheader("Re-entry ground footprint")
