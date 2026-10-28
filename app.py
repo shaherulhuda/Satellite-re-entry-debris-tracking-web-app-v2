@@ -610,7 +610,7 @@ with st.expander("How these numbers are computed"):
 # make the launcher draggable: script runs in a same-origin iframe and drives the parent page; the position is kept in
 # a <style> tag in the parent head (survives Streamlit re-renders) and in localStorage
 components.html("""<script>
-const P = window.parent, D = P.document, KEY = "orbisk_fab_pos";
+const P = window.parent, D = P.document, KEY = "orbisk_fab_pos_v2";  // v2: drops positions saved by earlier versions
 if (!P.__orbiskDrag) {
   P.__orbiskDrag = true;
   const style = D.createElement("style");
@@ -623,11 +623,27 @@ if (!P.__orbiskDrag) {
   new MutationObserver(nameButton).observe(D.body, {childList: true, subtree: true});
   const apply = (x, y) => {
     const w = 56, h = 56;
-    x = Math.min(Math.max(0, x), P.innerWidth - w); y = Math.min(Math.max(0, y), P.innerHeight - h);
+    x = Math.min(Math.max(8, x), Math.max(8, P.innerWidth - w - 8)); y = Math.min(Math.max(60, y), Math.max(60, P.innerHeight - h - 8));  // keep clear of Streamlit's top bar
     style.textContent = `.st-key-ai_fab{left:${x}px !important;top:${y}px !important;right:auto !important;}`;
     return [x, y];
   };
-  try { const s = JSON.parse(P.localStorage.getItem(KEY)); if (s) apply(s[0], s[1]); } catch (e) {}
+  const reset = () => { style.textContent = ""; try { P.localStorage.removeItem(KEY); } catch (e) {} };
+  const restore = () => {
+    try {
+      const s = JSON.parse(P.localStorage.getItem(KEY));
+      if (s && Number.isFinite(s[0]) && Number.isFinite(s[1]) && P.innerWidth > 200 && P.innerHeight > 200) apply(s[0], s[1]);
+    } catch (e) {}
+  };
+  // if the button ever ends up outside the window (saved position, resized window), put it back in its default corner
+  const rescue = () => {
+    const b = D.querySelector(".st-key-ai_fab button");
+    if (!b) return;
+    const r = b.getBoundingClientRect();
+    if (r.width > 0 && (r.right < 20 || r.bottom < 20 || r.left > P.innerWidth - 20 || r.top > P.innerHeight - 20)) reset();
+  };
+  restore();
+  setTimeout(rescue, 1500); setTimeout(rescue, 5000);
+  D.addEventListener("dblclick", (e) => { if (e.target.closest(".st-key-ai_fab")) reset(); }, true);
   let drag = null;
   D.addEventListener("pointerdown", (e) => {
     const fab = e.target.closest(".st-key-ai_fab");
@@ -669,7 +685,7 @@ if (!P.__orbiskDrag) {
       }
     }, 50);
   }, true);
-  P.addEventListener("resize", () => { try { const s = JSON.parse(P.localStorage.getItem(KEY)); if (s) apply(s[0], s[1]); } catch (e) {} });
+  P.addEventListener("resize", () => { restore(); setTimeout(rescue, 300); });
 }
 </script>""", height=0)
 
