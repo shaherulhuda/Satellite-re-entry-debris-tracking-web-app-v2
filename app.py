@@ -63,6 +63,14 @@ def watchlist_paths(norad_ids: tuple):
     return out
 
 
+@st.cache_data(ttl=300)
+def debris_orbit_paths(exclude: tuple):
+    """Orbit lines for every debris fragment except those already drawn as watchlist objects."""
+    skip = set(exclude)
+    recs = [records[int(i)] for i in df.loc[df["source"] == "debris", "NORAD_CAT_ID"] if int(i) not in skip]
+    return orbits.orbit_paths_fast(recs, n_points=48)
+
+
 def label(norad_id: int) -> str:
     r = records[norad_id]
     return f"{r['OBJECT_NAME']} ({norad_id})"
@@ -161,8 +169,10 @@ with tab_watch:
     st.caption("Decay figures are rough estimates from each object's measured drag (see *How these numbers are computed*). "
                "Many active satellites (e.g. Starlink) manoeuvre to hold altitude, so their drag-based estimate is not a prediction.")
     st.caption("Orbits of the listed objects around a rotating Earth (one revolution each; yellow dots = positions now). "
+               "Grey lines and dots are debris fragments; untick \"Debris orbits\" in the globe's control bar to hide them. "
                "The animation loops until you press Pause. Drag to rotate, scroll to zoom.")
-    components.html(globe.orbit_html(watchlist_paths(tuple(int(i) for i in table["NORAD ID"]))), height=660)
+    table_ids = tuple(int(i) for i in table["NORAD ID"])
+    components.html(globe.orbit_html(watchlist_paths(table_ids), debris=debris_orbit_paths(table_ids)), height=660)
     st.dataframe(
         table, width="stretch", hide_index=True,
         column_config={

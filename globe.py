@@ -88,6 +88,9 @@ _JS = """
   const gd = document.getElementById('globe');
   const WE = 7.2921159e-5;               // Earth rotation rate, rad/s
   const LINE = D.lineIdx, MARK = D.markIdx;
+  const DEB = D.deb || null;             // optional debris layer (lines + moving dots), can be switched off
+  let showDeb = !!DEB, forceDebLines = true, lastDebLines = -1e9;
+  if (DEB) { const tr = gd.data[DEB.lineIdx]; DEB.X = tr.x; DEB.Y = tr.y; DEB.Z = tr.z; }
   let s = 0, playing = true, speed = 300, spin = D.spin, last = null, phi = Math.atan2(D.eye[1], D.eye[0]);
   const rad = Math.hypot(D.eye[0], D.eye[1]), ez = D.eye[2];
 
@@ -99,6 +102,7 @@ _JS = """
     '<label>Speed <select id="sp"><option value="60">60×</option><option value="300" selected>300×</option>' +
     '<option value="1000">1000×</option></select></label>' +
     '<label><input type="checkbox" id="rot"' + (spin ? ' checked' : '') + '> Rotate view</label>' +
+    (DEB ? '<label><input type="checkbox" id="deb" checked> Debris orbits (' + DEB.count + ')</label>' : '') +
     '<span id="clk" style="min-width:86px"></span>';
   document.body.appendChild(bar);
   const pp = bar.querySelector('#pp'), sel = bar.querySelector('#sp'), rot = bar.querySelector('#rot'),
@@ -106,6 +110,13 @@ _JS = """
   pp.onclick = () => { playing = !playing; pp.textContent = playing ? '⏸ Pause' : '▶ Play'; last = null; };
   sel.onchange = () => { speed = +sel.value; };
   rot.onchange = () => { spin = rot.checked; };
+  if (DEB) {
+    bar.querySelector('#deb').onchange = (e) => {
+      showDeb = e.target.checked;
+      Plotly.restyle(gd, {visible: showDeb}, [DEB.lineIdx, DEB.markIdx]);
+      if (showDeb) { forceDebLines = true; render(0); }
+    };
+  }
   gd.addEventListener('pointerdown', () => { spin = false; rot.checked = false; });
 
   function render(dt) {
@@ -122,13 +133,34 @@ _JS = """
       const x = o.x[i] + u * (o.x[i + 1] - o.x[i]), y = o.y[i] + u * (o.y[i + 1] - o.y[i]);
       mx.push(x * c + y * sn); my.push(-x * sn + y * c); mz.push(o.z[i] + u * (o.z[i + 1] - o.z[i]));
     }
-    const upd = {x: [lx, mx], y: [ly, my], z: [D.Z, mz]};
+    const idx = [LINE, MARK], ux = [lx, mx], uy = [ly, my], uz = [D.Z, mz];
+    if (DEB && showDeb) {                // moving debris dots: every frame
+      const dx = [], dy = [], dz = [];
+      for (const o of DEB.sats) {
+        const f = ((s % o.T) / o.T) * (o.n - 1), i = Math.min(Math.floor(f), o.n - 2), u = f - i, k = o.o + i;
+        const x = DEB.X[k] + u * (DEB.X[k + 1] - DEB.X[k]), y = DEB.Y[k] + u * (DEB.Y[k + 1] - DEB.Y[k]);
+        dx.push(x * c + y * sn); dy.push(-x * sn + y * c); dz.push(DEB.Z[k] + u * (DEB.Z[k + 1] - DEB.Z[k]));
+      }
+      idx.push(DEB.markIdx); ux.push(dx); uy.push(dy); uz.push(dz);
+    }
+    const upd = {x: ux, y: uy, z: uz};
     let lay = {};
     if (spin && dt) {
       phi += dt * 0.105;                  // ~6 degrees/s
       lay = {'scene.camera.eye': {x: rad * Math.cos(phi), y: rad * Math.sin(phi), z: ez}};
     }
-    Plotly.update(gd, upd, lay, [LINE, MARK]);
+    Plotly.update(gd, upd, lay, idx);
+    const nowMs = performance.now();
+    if (DEB && showDeb && (forceDebLines || nowMs - lastDebLines > 400)) {   // heavy: rotate all debris orbit lines ~2-3x/s
+      const n = DEB.X.length, rx = new Array(n), ry = new Array(n);
+      for (let i = 0; i < n; i++) {
+        const x = DEB.X[i], y = DEB.Y[i];
+        if (x === null) { rx[i] = null; ry[i] = null; continue; }
+        rx[i] = x * c + y * sn; ry[i] = -x * sn + y * c;
+      }
+      Plotly.restyle(gd, {x: [rx], y: [ry], z: [DEB.Z]}, [DEB.lineIdx]);
+      lastDebLines = nowMs; forceDebLines = false;
+    }
     const m = Math.floor(s / 60);
     clk.textContent = '+' + String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
   }
@@ -148,9 +180,15 @@ _JS = """
 """
 
 
-def orbit_html(paths: list[dict], height: int = 650, highlight: bool = False, spin: bool = True) -> str:
+def _int_or_null(a):
+    return [None if not np.isfinite(v) else int(round(float(v))) for v in a]
+
+
+def orbit_html(paths: list[dict], height: int = 650, highlight: bool = False, spin: bool = True,
+               debris: list[dict] | None = None) -> str:
     """paths: dicts with name, x, y, z (one period, Earth-fixed-at-start km), period_s, optional hover.
 
+    `debris` (same format, many objects) adds a toggleable layer of thin orbit lines and moving dots.
     Returns HTML for st.components.v1.html. The animation loops until paused.
     """
     fig = go.Figure(earth_traces())
@@ -166,6 +204,22 @@ def orbit_html(paths: list[dict], height: int = 650, highlight: bool = False, sp
         x=[0] * len(paths), y=[0] * len(paths), z=[0] * len(paths), mode="markers", showlegend=False,
         marker=dict(size=7 if highlight else 3.5, color="#ffd23f"),
         hovertext=[p.get("hover", p["name"]) for p in paths], hoverinfo="text"))
+    line_idx, mark_idx = len(fig.data) - 2, len(fig.data) - 1
+    deb_data = None
+    if debris:
+        DX, DY, DZ, sats = [], [], [], []
+        for p in debris:
+            n = len(p["x"])
+            sats.append({"o": len(DX), "n": n, "T": round(float(p["period_s"]), 1)})
+            DX += _int_or_null(p["x"]) + [None]
+            DY += _int_or_null(p["y"]) + [None]
+            DZ += _int_or_null(p["z"]) + [None]
+        fig.add_trace(go.Scatter3d(x=DX, y=DY, z=DZ, mode="lines", hoverinfo="skip", showlegend=False,
+                                   opacity=0.06, line=dict(width=1, color="#7f9bd6")))
+        fig.add_trace(go.Scatter3d(x=[0] * len(sats), y=[0] * len(sats), z=[0] * len(sats), mode="markers",
+                                   hoverinfo="skip", showlegend=False, opacity=0.8, marker=dict(size=2, color="#c3cfe8")))
+        deb_data = {"sats": sats, "count": len(sats),  # X/Y/Z are read back from the plotted trace (no second copy)
+                    "lineIdx": len(fig.data) - 2, "markIdx": len(fig.data) - 1}
     eye = (1.35, 1.0, 0.6)
     ax = dict(visible=False, showbackground=False)
     fig.update_layout(
@@ -174,7 +228,7 @@ def orbit_html(paths: list[dict], height: int = 650, highlight: bool = False, sp
                    camera=dict(eye=dict(x=eye[0], y=eye[1], z=eye[2]))))
     data = {
         "X": X, "Y": Y, "Z": Z, "eye": eye, "spin": spin,
-        "lineIdx": len(fig.data) - 2, "markIdx": len(fig.data) - 1,
+        "lineIdx": line_idx, "markIdx": mark_idx, "deb": deb_data,
         "sats": [{"x": _nan_to_null(p["x"]), "y": _nan_to_null(p["y"]), "z": _nan_to_null(p["z"]),
                   "T": p["period_s"]} for p in paths],
     }

@@ -118,3 +118,37 @@ def orbit_path_xyz(record: dict, n_points: int = 180, start=None) -> dict:
     gcrs = sat.at(t).position.km  # (3, n) inertial axes
     x, y, z = itrs.rotation_at(t0) @ gcrs  # fixed to the Earth at t0
     return {"x": x, "y": y, "z": z, "period_s": period_s}
+
+
+def orbit_paths_fast(records: list[dict], n_points: int = 48, start=None) -> list[dict]:
+    """Many orbits at once for display (thousands of objects): SGP4 straight on the stored elements.
+
+    Same output convention as `orbit_path_xyz` (Earth-fixed axes at `start`, one period, evenly spaced in
+    time) but rotates TEME to Earth-fixed by the sidereal angle only, which is accurate to ~1 km, and rounds
+    to whole km. Objects that fail to propagate are skipped.
+    """
+    from sgp4 import omm
+    from sgp4.api import Satrec, jday
+
+    t0 = start if start is not None else TS.now()
+    theta = math.radians(t0.gmst * 15.0) % (2 * math.pi)
+    c, s = math.cos(theta), math.sin(theta)
+    y_, mo_, d_, h_, mi_, se_ = t0.utc
+    jd0, fr0 = jday(int(y_), int(mo_), int(d_), int(h_), int(mi_), float(se_))
+    frac = np.linspace(0.0, 1.0, n_points)
+    out = []
+    for rec in records:
+        try:
+            sat = Satrec()
+            omm.initialize(sat, rec)
+            period_s = 86400.0 / float(rec["MEAN_MOTION"])
+            fr = fr0 + frac * period_s / 86400.0
+            e, r, _ = sat.sgp4_array(np.full(n_points, jd0), fr)
+        except Exception:
+            continue
+        if np.any(e != 0):
+            continue
+        x, y, z = r[:, 0], r[:, 1], r[:, 2]
+        out.append({"x": np.round(x * c + y * s), "y": np.round(-x * s + y * c), "z": np.round(z),
+                    "period_s": period_s, "name": rec["OBJECT_NAME"]})
+    return out
