@@ -185,7 +185,7 @@ if not entered:
         '<div class="orbisk-cover">'
         '<div class="hero"><i class="orbit ring r3"></i><i class="orbit ring r2"></i><i class="orbit ring r1"></i><i class="orbit planet"></i></div>'
         f'<div><img class="logo" alt="Orbisk" src="{_data_uri("orbisk-logo-for-dark.png")}"></div>'
-        '<div><h1>Which satellites are coming down, and what could they hit?</h1>'
+        '<div><h1>We track the risk, call the fall, catch the close calls — act before it\u2019s too late</h1>'
         '<p class="lead">Orbisk ranks the 50 highest-risk active satellites in low Earth orbit, estimates when each might re-enter the atmosphere, '
         'and screens them for close approaches with other satellites and space debris.</p></div>'
         '<div class="cards">'

@@ -237,14 +237,14 @@ def test_screen_this_object_runs_the_screening():
 def test_cover_page_comes_first_and_enter_opens_the_watchlist():
     at = open_app(400, entered=False).run()
     assert not at.exception
-    assert any("Which satellites are coming down" in m.value for m in at.markdown)
+    assert any("We track the risk, call the fall, catch the close calls" in m.value for m in at.markdown)
     assert at.button(key="enter_btn").label.startswith("Enter Watchlist")
     assert not at.dataframe and not at.segmented_control  # nothing of the app is built behind the cover
     assert not any(b.key == "ai_suggest_0" for b in at.button)
     at.button(key="enter_btn").click().run()
     assert not at.exception
     assert at.segmented_control(key="section").value == "🛰️ Watchlist" and len(at.dataframe) == 1
-    assert not any("Which satellites are coming down" in m.value for m in at.markdown)
+    assert not any("We track the risk, call the fall, catch the close calls" in m.value for m in at.markdown)
     assert any("orbisk-header" in m.value for m in at.markdown)  # the normal header replaces the cover
 
 
