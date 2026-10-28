@@ -282,110 +282,41 @@ EVENT_CONFIG = {
 
 with tab_triage:
     st.subheader("Conjunctions & triage")
-    mode = st.radio("View", ["Screen an object for close approaches", "Follow a debris object"], horizontal=True, key="tri_mode")
-
-    if mode.startswith("Screen"):
-        asset_ids = ids  # active satellites only (from active.json)
-        with st.form("tri_asset_form"):
-            a1, a2, a3 = st.columns([3, 1, 1])
-            asset = a1.selectbox("Object to screen", asset_ids,
-                                 index=asset_ids.index(25544) if 25544 in asset_ids else 0, format_func=label)
-            days = a2.slider("Window (days)", 1, 30, 2)
-            hours = days * 24
-            thr = a3.slider("Report within (km)", 1, 100, 25)
-            run = st.form_submit_button("Run screening")
-        if run:
-            jd0, ts0 = start_time("Snapshot time")
-            with st.spinner("Propagating candidates…"):
-                try:
-                    ev, n = triage.screen_asset(records[int(asset)], df, records, jd0, hours=hours, threshold_km=thr,
-                                                against="all")
-                except Exception as exc:
-                    st.error(f"Screening failed: {exc}")
-                else:
-                    st.session_state["tri_asset"] = {"asset": int(asset), "events": ev, "n": n, "hours": ev.attrs.get("window_hours_effective", hours), "asked": hours, "thr": thr,
-                                                     "start": ts0.strftime("%Y-%m-%d %H:%M")}
-        res = st.session_state.get("tri_asset")
-        if res:
-            ev = res["events"]
-            m1, m2, m3 = st.columns(3)
-            m1.metric("Objects in a similar altitude band", f"{res['n']:,}")
-            m2.metric(f"Passes within {res['thr']} km", f"{len(ev)}")
-            m3.metric("Closest pass", f"{ev['miss_km'].min():.1f} km" if len(ev) else "none")
-            st.caption(f"{records[res['asset']]['OBJECT_NAME']} · window from {res['start']} UTC for {res['hours'] / 24:g} days. "
-                       "Objects holding within ~20 km of each other the whole window (docked/formation) are ignored."
-                       + (f" The object's orbit ends after {res['hours'] / 24:.1f} days, so only that part was screened."
-                          if res["hours"] < res["asked"] - 1 else ""))
-            if not len(ev):
-                st.success("No close approaches against any catalogue object inside the threshold in this window.")
+    asset_ids = ids  # active satellites only (from active.json)
+    with st.form("tri_asset_form"):
+        a1, a2, a3 = st.columns([3, 1, 1])
+        asset = a1.selectbox("Object to screen", asset_ids,
+                             index=asset_ids.index(25544) if 25544 in asset_ids else 0, format_func=label)
+        days = a2.slider("Window (days)", 1, 30, 2)
+        hours = days * 24
+        thr = a3.slider("Report within (km)", 1, 100, 25)
+        run = st.form_submit_button("Run screening")
+    if run:
+        jd0, ts0 = start_time("Snapshot time")
+        with st.spinner("Propagating candidates…"):
+            try:
+                ev, n = triage.screen_asset(records[int(asset)], df, records, jd0, hours=hours, threshold_km=thr,
+                                            against="all")
+            except Exception as exc:
+                st.error(f"Screening failed: {exc}")
             else:
-                st.dataframe(events_table(ev), width="stretch", hide_index=True, column_config=EVENT_CONFIG)
-
-    else:
-        gsel = st.selectbox("Debris set", ["All"] + sorted(df.loc[df["source"] == "debris", "GROUP"].dropna().unique()), key="tri_group")
-        deb = df[df["source"] == "debris"]
-        if gsel != "All":
-            deb = deb[deb["GROUP"] == gsel]
-        deb = deb.sort_values("decay_days", na_position="last")
-        deb_ids = deb["NORAD_CAT_ID"].astype(int).tolist()
-        info = {int(r.NORAD_CAT_ID): r for r in deb.itertuples()}
-
-        def deb_label(i):
-            r = info[i]
-            return f"{r.OBJECT_NAME} ({i}) · {r.GROUP} · est. {decay.format_days(r.decay_days)} · perigee {r.perigee_km:.0f} km"
-
-        dsel = st.selectbox("Debris object (soonest estimated re-entry first)", deb_ids, format_func=deb_label, key="tri_deb")
-        drow = df[df["NORAD_CAT_ID"] == dsel].iloc[0]
-        e1, e2, e3, e4 = st.columns(4)
-        e1.metric("Perigee / apogee", f"{drow['perigee_km']:.0f} / {drow['apogee_km']:.0f} km")
-        e2.metric("Inclination", f"{drow['INCLINATION']:.1f}°")
-        e3.metric("Est. time to re-entry", decay.format_days(drow["decay_days"]))
-        e4.metric("Rough range", decay.format_range(drow["decay_days_low"], drow["decay_days_high"]))
-        st.caption(f"Decay status: **{drow['decay_status']}**. Rough estimate (factor 2 or worse).")
-
-        bands = triage.altitude_bands(df)
-        h0 = float(decay.mean_altitude_km(drow["MEAN_MOTION"]))
-        crossings = triage.band_crossings(h0, float(drow["decay_km_day"]), bands)
-        st.markdown("#### 1. Sinking through the crowded altitudes")
-        if np.isfinite(drow["decay_km_day"]) and drow["decay_km_day"] > 0:
-            st.plotly_chart(charts.eol_figure(h0, float(drow["decay_km_day"]), bands), width="stretch")
-            if len(crossings):
-                st.dataframe(pd.DataFrame({
-                    "Altitude band": crossings["band"], "Active objects there": crossings["n_objects"],
-                    "Enters in": ["already inside" if i else decay.format_days(d) for i, d in
-                                  zip(crossings["already_inside"], crossings["enters_days"])],
-                    "Leaves in": crossings["leaves_days"].map(decay.format_days)}), width="stretch", hide_index=True)
-            st.caption("Bands are the altitude ranges where the active catalogue is densest (found from the data), plus the ISS orbit.")
+                st.session_state["tri_asset"] = {"asset": int(asset), "events": ev, "n": n, "hours": ev.attrs.get("window_hours_effective", hours), "asked": hours, "thr": thr,
+                                                 "start": ts0.strftime("%Y-%m-%d %H:%M")}
+    res = st.session_state.get("tri_asset")
+    if res:
+        ev = res["events"]
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Objects in a similar altitude band", f"{res['n']:,}")
+        m2.metric(f"Passes within {res['thr']} km", f"{len(ev)}")
+        m3.metric("Closest pass", f"{ev['miss_km'].min():.1f} km" if len(ev) else "none")
+        st.caption(f"{records[res['asset']]['OBJECT_NAME']} · window from {res['start']} UTC for {res['hours'] / 24:g} days. "
+                   "Objects holding within ~20 km of each other the whole window (docked/formation) are ignored."
+                   + (f" The object's orbit ends after {res['hours'] / 24:.1f} days, so only that part was screened."
+                      if res["hours"] < res["asked"] - 1 else ""))
+        if not len(ev):
+            st.success("No close approaches against any catalogue object inside the threshold in this window.")
         else:
-            st.info("No measurable decay: the model cannot project this object's descent (it may stay in orbit for decades).")
-
-        st.markdown("#### 2. Who it passes close to")
-        with st.form("tri_deb_form"):
-            b1, b2 = st.columns(2)
-            dd = b1.slider("Window (days)", 1, 30, 1)
-            dh = dd * 24
-            dthr = b2.slider("Report within (km)", 5, 100, 25)
-            drun = st.form_submit_button("Screen against active satellites")
-        if drun:
-            jd0, ts0 = start_time("Snapshot time")
-            with st.spinner("Propagating satellites… (can take ~10-20 s)"):
-                try:
-                    thr_ev, thr_n = triage.screen_debris_vs_satellites(records[int(dsel)], df, records, jd0, hours=dh, threshold_km=dthr)
-                except Exception as exc:
-                    st.error(f"Screening failed: {exc}")
-                else:
-                    st.session_state["tri_threat"] = {"deb": int(dsel), "events": thr_ev, "n": thr_n, "hours": thr_ev.attrs.get("window_hours_effective", dh),
-                                                      "thr": dthr, "start": ts0.strftime("%Y-%m-%d %H:%M")}
-        tres = st.session_state.get("tri_threat")
-        if tres and tres["deb"] == int(dsel):
-            st.write(f"{tres['n']:,} satellites in a similar altitude band · **{len(tres['events'])}** passes within {tres['thr']} km "
-                     f"in the {tres['hours'] / 24:g} days from {tres['start']} UTC")
-            if len(tres["events"]):
-                st.dataframe(events_table(tres["events"]), width="stretch", hide_index=True, column_config=EVENT_CONFIG)
-
-        st.markdown("#### 3. Where it can come down")
-        st.plotly_chart(charts.footprint_figure(float(drow["INCLINATION"])), width="stretch")
-        st.caption("Shows the latitudes this orbit can reach, not a landing prediction.")
+            st.dataframe(events_table(ev), width="stretch", hide_index=True, column_config=EVENT_CONFIG)
 
 # floating chat launcher (top-right, below Streamlit's toolbar); the popover opens downward and closes with the same button
 st.markdown(
@@ -494,7 +425,9 @@ with st.expander("How these numbers are computed"):
         "(so 50 listed satellites show 10 / 30 / 10, and a list of 10 is all red). Debris is not on the watchlist; it can be drawn on the globe.\n"
         "- **Footprint:** latitude band ±min(i, 180−i); time per latitude from sin φ = sin i · sin u.\n"
         "- **Conjunctions:** coarse-grid SGP4 screening with 0.5 s refinement of local minima, against every satellite and debris fragment.\n"
-        "- **Debris and triage:** the debris groups (TLE or CelesTrak JSON files in data/debris) are parsed into the same record format and screened with the same SGP4 conjunction code. "
+        "- **Debris:** the debris groups (TLE or CelesTrak JSON files in data/debris) are parsed into the same record format. They are not on the watchlist "
+        "or in the pickers; they are only drawn as orbits on the Watchlist globe and used as close-approach partners when an active satellite is screened "
+        "(Conjunctions & Triage, and the close-approach terms of the risk score). Altitude and risk figures are for active satellites only."
         "Altitude bands are the densest ranges of the active catalogue, found from the data.\n"
         "- **Assistant (optional):** off unless an API key is supplied. The model only receives numbers computed above, or calls the app's own lookup functions; it never computes orbits.\n"
         "- **Limits:** one element set per object (no history until snapshots are added), mean elements are only km-accurate, "

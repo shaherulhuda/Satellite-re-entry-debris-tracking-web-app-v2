@@ -12,20 +12,19 @@ when you supply an Anthropic API key, and the model only sees numbers computed b
 On a public deployment a key from secrets can be used by anyone with the link. Set `ASSISTANT_PASSWORD` to require an
 access code and `ASSISTANT_MAX_REQUESTS` (default 30) to cap requests per session. Never commit a key.
 
-## Debris data and the Triage desk
+## Debris data and scope
 
-`data/debris/` holds the debris groups (Fengyun-1C, Iridium-33, Cosmos-2251; CelesTrak JSON or 3-line TLE). `debris.py` parses them into the
-same record format as `active.json`, so they flow through every feature (watchlist, tracker, conjunctions, chat tools).
+The Watchlist, Re-entry Tracker and Conjunctions & Triage tabs show and screen **active satellites from `active.json` only**.
+Debris (`data/debris/`: Fengyun-1C, Iridium-33, Cosmos-2251; CelesTrak JSON or 3-line TLE, parsed by `debris.py`) is used in two ways:
 
-The **Conjunctions & Triage** tab (it replaces the separate Conjunctions and Triage desk tabs) has two views:
+- **Orbital view:** the Watchlist globe can draw debris orbits (the **Debris** box; 0 = hidden).
+- **Close approaches:** when an active satellite is screened (Conjunctions & Triage, and the close-approach terms of the risk score),
+  every other satellite and every debris fragment is a possible partner.
 
-- **Screen an object for close approaches:** closest passes of any object against every satellite and debris fragment
-  (default 48 h).
-- **Follow a debris object:** its estimated descent through the crowded altitude bands (found from the data), which satellites
-  it passes close to, and the latitudes it can come down within.
-
-Screening uses mean elements and gives no collision probability. These are triage estimates, not operational decisions.
-Avoidance-cost maths (`maneuver.py`) and memo prompts (`llm.py`) are kept in the code for the AI assistant to use later.
+**Conjunctions & Triage:** pick an active satellite, a window of 1 to 30 days and a distance threshold; the closest passes
+against every satellite and debris fragment are listed. Screening uses mean elements and gives no collision probability, so
+results are triage estimates, not operational decisions. Avoidance-cost maths (`maneuver.py`) and the memo prompt (`llm.py`)
+are kept in the code for the AI assistant to use later.
 
 ## Keeping every data set at the same snapshot
 

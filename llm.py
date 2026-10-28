@@ -61,15 +61,6 @@ DECISION_MEMO_TASK = (
     "5) next steps (3 short bullets) that a human operator or the operator's flight-dynamics team should take. "
     "Never present the recommendation as a certain forecast and do not invent figures that are not in the facts."
 )
-EOL_MEMO_TASK = (
-    "Write one end-of-life briefing (about 250-350 words) for a space project manager covering the whole "
-    "descent of this debris object: 1) headline with how soon it is expected to come down and how uncertain "
-    "that is; 2) which crowded altitude bands it sinks through and roughly when, and which satellites it passes "
-    "close to in the screening window; 3) the ground-risk picture: the latitude band it can come down within and "
-    "the share of Earth's surface that covers, stating clearly that the landing point cannot be predicted this "
-    "far ahead; 4) two or three recommended actions. Use only the facts given and keep the caveats."
-)
-
 # ---------------------------------------------------------------- data context
 
 
@@ -85,6 +76,11 @@ class DataContext:
         out = self.catalogue.copy()
         out["risk"] = decay.risk_score(self.components, self.weights)
         return out
+
+    def satellites(self) -> pd.DataFrame:
+        """Active satellites only (the assistant looks these up; debris is only a screening partner)."""
+        out = self.with_risk()
+        return out[out["source"] == "active"] if "source" in out else out
 
 
 def _num(x, nd=1):
@@ -102,7 +98,11 @@ def object_facts(ctx: DataContext, norad_id: int, include_position: bool = True)
     if hit.empty:
         raise KeyError(f"no object with NORAD id {norad_id}")
     row = hit.iloc[0]
-    rank = int((df["risk"] > row["risk"]).sum()) + 1
+    if row.get("source") == "debris":
+        raise KeyError(f"NORAD id {norad_id} is a debris fragment; only active satellites can be looked up")
+    pool = ctx.satellites()
+    rank = int((pool["risk"] > row["risk"]).sum()) + 1  # rank among the active satellites
+    df = pool
     comp = ctx.components.loc[hit.index[0]]
     facts = {
         "name": row["OBJECT_NAME"], "norad_id": int(row["NORAD_CAT_ID"]), "type_guess": row["type"],
@@ -164,7 +164,7 @@ def object_facts(ctx: DataContext, norad_id: int, include_position: bool = True)
 TOOLS = [
     {
         "name": "search_objects",
-        "description": "Filter and rank objects in the catalogue. All filters are optional and combined with AND. "
+        "description": "Filter and rank the active satellites in the catalogue (debris is not listed). All filters are optional and combined with AND. "
                        "Returns total_matches plus up to `limit` rows (max 25). Use this to count or list objects.",
         "input_schema": {
             "type": "object",
@@ -172,7 +172,7 @@ TOOLS = [
                 "min_perigee_km": {"type": "number"}, "max_perigee_km": {"type": "number"},
                 "min_apogee_km": {"type": "number"}, "max_apogee_km": {"type": "number"},
                 "min_inclination_deg": {"type": "number"}, "max_inclination_deg": {"type": "number"},
-                "object_type": {"type": "string", "enum": ["payload", "rocket body", "debris"]},
+                "object_type": {"type": "string", "enum": ["payload", "rocket body"]},
                 "name_contains": {"type": "string", "description": "case-insensitive substring of the object name"},
                 "max_est_days_to_reentry": {"type": "number", "description": "only objects whose drag-based estimate is at most this many days"},
                 "min_risk_score": {"type": "number"},
@@ -193,7 +193,7 @@ TOOLS = [
     },
     {
         "name": "screen_conjunctions",
-        "description": "Screen one object for close approaches against catalogue objects in a similar altitude band. "
+        "description": "Screen one active satellite for close approaches against every catalogue object (satellites and debris) in a similar altitude band. "
                        "Starts at the data snapshot time. Screening only, not a collision assessment.",
         "input_schema": {
             "type": "object",
@@ -209,7 +209,7 @@ TOOLS = [
 
 
 def _search(ctx: DataContext, a: dict) -> dict:
-    df = ctx.with_risk()
+    df = ctx.satellites()
     m = pd.Series(True, index=df.index)
     ranges = [("min_perigee_km", "perigee_km", ">="), ("max_perigee_km", "perigee_km", "<="),
               ("min_apogee_km", "apogee_km", ">="), ("max_apogee_km", "apogee_km", "<="),
@@ -244,7 +244,7 @@ def _details(ctx: DataContext, a: dict) -> dict:
     name = str(a.get("name", "")).strip()
     if not name:
         return {"error": "give norad_id or name"}
-    df = ctx.catalogue
+    df = ctx.satellites()
     exact = df[df["OBJECT_NAME"].str.upper() == name.upper()]
     hit = exact if len(exact) else df[df["OBJECT_NAME"].str.contains(name, case=False, regex=False)]
     if hit.empty:
@@ -260,6 +260,8 @@ def _screen(ctx: DataContext, a: dict) -> dict:
     nid = int(a["norad_id"])
     if nid not in ctx.records:
         return {"error": f"no object with NORAD id {nid}"}
+    if nid not in set(ctx.satellites()["NORAD_CAT_ID"]):
+        return {"error": f"NORAD id {nid} is not an active satellite; only active satellites can be screened"}
     hours = min(max(float(a.get("hours", 6)), 1.0), 24.0)
     thr = min(max(float(a.get("threshold_km", 10)), 1.0), 50.0)
     snap = ctx.catalogue["EPOCH_DT"].max()

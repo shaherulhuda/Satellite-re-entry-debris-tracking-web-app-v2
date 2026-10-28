@@ -85,33 +85,6 @@ def test_asset_vs_debris_finds_planted_debris_and_ignores_formation(world):
     assert {"other_perigee_km", "other_type"} <= set(ev.columns)
 
 
-def test_debris_vs_satellites_only_uses_non_debris(world):
-    cat, recs = world
-    d = int(cat[(cat.source == "debris") & cat.decay_days.notna()].nsmallest(1, "decay_days").iloc[0]["NORAD_CAT_ID"])
-    s = triage.conjunction.to_satrec(recs[d])
-    ev, n = triage.screen_debris_vs_satellites(recs[d], cat, recs, s.jdsatepoch + s.jdsatepochF, hours=1, threshold_km=50)
-    assert n > 0 and not set(ev["norad_id"]) & set(cat[cat.source == "debris"]["NORAD_CAT_ID"])
-
-
-# ---- bands and crossings
-def test_altitude_bands_find_iss_and_a_dominant_constellation(world):
-    bands = triage.altitude_bands(world[0])
-    labels = [b["label"] for b in bands]
-    assert "ISS orbit" in labels and any(l.endswith("shell") for l in labels)
-    assert all(b["lo"] < b["hi"] for b in bands)
-
-
-def test_band_crossings_ordering_and_inside_flag():
-    bands = [{"lo": 300.0, "hi": 400.0, "n_objects": 10, "label": "low"},
-             {"lo": 480.0, "hi": 560.0, "n_objects": 20, "label": "mid"},
-             {"lo": 900.0, "hi": 950.0, "n_objects": 5, "label": "above"}]
-    cr = triage.band_crossings(520.0, 0.5, bands)
-    assert list(cr["band"].str.split(" ").str[0]) == ["mid", "low"]  # 'above' skipped
-    assert bool(cr.iloc[0]["already_inside"]) and cr.iloc[0]["enters_days"] == 0
-    assert cr.iloc[1]["enters_days"] > 0 and cr.iloc[1]["leaves_days"] > cr.iloc[1]["enters_days"]
-    assert triage.band_crossings(520.0, float("nan"), bands).empty
-
-
 # ---- facts for the LLM are plain JSON
 def test_memo_facts_are_json_serialisable(world):
     import llm
@@ -119,15 +92,11 @@ def test_memo_facts_are_json_serialisable(world):
     ctx = llm.DataContext(cat, recs, decay.risk_components(cat))
     iss = recs[25544]
     s = triage.conjunction.to_satrec(iss)
-    ev, n = triage.screen_asset_vs_debris(iss, cat, recs, s.jdsatepoch + s.jdsatepochF, hours=24, threshold_km=60)
+    ev, n = triage.screen_asset(iss, cat, recs, s.jdsatepoch + s.jdsatepochF, hours=24, threshold_km=60)
     plan = maneuver.avoidance_plan(3.0, 5.0, 15.5, 420000, 300)
     facts = triage.asset_facts(llm.object_facts(ctx, 25544, include_position=False), ev, n, 24, 60, "t", plan,
                                {"mass_kg": 420000}, None)
     json.dumps(facts)
-    d = int(cat[(cat.source == "debris") & cat.decay_days.notna()].nsmallest(1, "decay_days").iloc[0]["NORAD_CAT_ID"])
-    row = cat[cat["NORAD_CAT_ID"] == d].iloc[0]
-    cr = triage.band_crossings(float(decay.mean_altitude_km(row.MEAN_MOTION)), float(row.decay_km_day), triage.altitude_bands(cat))
-    json.dumps(triage.eol_facts(llm.object_facts(ctx, d, include_position=False), cr, ev, n, 24, 60, "t", triage.altitude_bands(cat)))
 
 
 def test_screen_asset_against_modes(world):
