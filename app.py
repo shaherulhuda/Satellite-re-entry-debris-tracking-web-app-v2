@@ -53,7 +53,7 @@ with st.expander("Data sets and snapshot consistency"):
     st.caption("Position error grows with the age of an element set, so all sets should come from one download. "
                "`python tools/refresh_data.py` fetches the active catalogue and every debris group at once.")
 
-tab_watch, tab_track, tab_triage = st.tabs(["Watchlist", "Tracker", "Conjunctions & Triage"])
+tab_watch, tab_track, tab_triage = st.tabs(["Watchlist", "Re-entry Tracker", "Conjunctions & Triage"])
 
 
 @st.cache_data(ttl=300)
