@@ -231,15 +231,15 @@ def _secret(name):
 
 def ai_status():
     """(ready, client_key, message). client_key is the session-pasted key, or None to use the configured one."""
-    pasted = st.session_state.get("pasted_key") or ""
-    configured = _secret("ANTHROPIC_API_KEY")
+    pasted = (st.session_state.get("pasted_key") or "").strip()
+    configured = (_secret("ANTHROPIC_API_KEY") or "").strip()
     if not (pasted or configured):
         return False, None, "AI is off: add an API key in the assistant (top right) to enable this."
     if configured and not pasted:
         gate = _secret("ASSISTANT_PASSWORD")
         if gate and st.session_state.get("ai_gate") != gate:
             return False, None, "Enter the access code in the assistant (top right) to enable AI features."
-    return True, pasted or None, None
+    return True, pasted or configured or None, None
 
 
 ASSISTANT_DEFAULT_MAX = 10  # questions per session (one question, briefing or explanation = one request)
@@ -585,9 +585,9 @@ with st.container(key="ai_fab"):
         st.caption("Optional. The app is fully offline without this. When you add an Anthropic API key the assistant can "
                    "explain results in plain language. It never calculates orbits: it only sees numbers this app computed, "
                    "or looks data up through the app's own functions.")
-        pasted = st.text_input("Anthropic API key", type="password", key="pasted_key",
-                               help="Kept only in this browser session; not stored or logged.")
-        configured = _secret("ANTHROPIC_API_KEY")
+        pasted = (st.text_input("Anthropic API key", type="password", key="pasted_key",
+                                help="Kept only in this browser session; not stored or logged.") or "").strip()
+        configured = (_secret("ANTHROPIC_API_KEY") or "").strip()
         api_key = pasted or configured
         key_from_config = bool(configured) and not pasted
 

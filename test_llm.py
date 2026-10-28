@@ -119,3 +119,18 @@ def test_recommendation_prompt_is_grounded_in_facts(ctx):
     llm.explain(client, llm.DEFAULT_MODEL, facts, llm.RECOMMEND_TASK)
     sent = client.calls[0]["messages"][0]["content"]
     assert "suggested_action" in sent and "monitor / prepare / act" in sent
+
+
+def test_api_key_whitespace_is_stripped_and_explained(monkeypatch):
+    import anthropic
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    assert llm.make_client("sk-ant-abc\n").api_key == "sk-ant-abc"
+    assert llm.make_client('  "sk-ant-abc" ').api_key == "sk-ant-abc"
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-env \n")
+    assert llm.make_client().api_key == "sk-ant-env"
+    exc = anthropic.APIConnectionError(request=NS(url="https://api.anthropic.com"))
+    exc.__cause__ = ValueError("Illegal header value b'sk-ant-abc\\n'")
+    assert "space or line break" in llm.friendly_error(exc)
+    exc2 = anthropic.APIConnectionError(request=NS(url="https://api.anthropic.com"))
+    exc2.__cause__ = OSError("boom")
+    assert "OSError" in llm.friendly_error(exc2)

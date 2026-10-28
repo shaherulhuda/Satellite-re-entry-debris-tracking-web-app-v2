@@ -371,8 +371,12 @@ def run_tool(ctx: DataContext, name: str, args: dict) -> tuple[str, bool]:
 
 def make_client(api_key: str | None = None):
     """Create the Anthropic client lazily so the app starts without the package or a key."""
+    import os
+
     import anthropic
-    return anthropic.Anthropic(api_key=api_key) if api_key else anthropic.Anthropic()
+    # A key copied with a trailing space or line break makes the request fail with a misleading "cannot reach the API".
+    key = (api_key or os.environ.get("ANTHROPIC_API_KEY") or "").strip().strip("\"'").strip()
+    return anthropic.Anthropic(api_key=key) if key else anthropic.Anthropic()
 
 
 def _request_kwargs(model: str, effort: str) -> dict:
@@ -457,7 +461,11 @@ def friendly_error(exc: Exception) -> str:
     if isinstance(exc, anthropic.RateLimitError):
         return "Rate limited by the API. Wait a moment and try again."
     if isinstance(exc, anthropic.APIConnectionError):
-        return "Could not reach the API (no internet?). The rest of the app still works offline."
+        cause = exc.__cause__
+        if cause is not None and "illegal header" in str(cause).lower():
+            return "The API key contains a space or line break. Paste it again without any extra characters."
+        detail = f" ({type(cause).__name__})" if cause is not None else ""
+        return f"Could not reach the API{detail}. Check the internet connection; the rest of the app still works offline."
     if isinstance(exc, anthropic.APIStatusError):
         return f"The API returned an error ({exc.status_code})."
     return f"Unexpected error: {type(exc).__name__}"
