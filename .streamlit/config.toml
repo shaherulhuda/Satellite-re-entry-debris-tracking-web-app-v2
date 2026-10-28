@@ -1,0 +1,7 @@
+# Orbisk theme: cyan from the logo's orbit ring, so buttons and tabs never share a colour with the red / yellow / green risk levels.
+# Deeper than the logo cyan (#4FD1E0) in light mode so white button text stays readable; the browser's light or dark setting is followed.
+[theme.light]
+primaryColor = "#0E8FA3"
+
+[theme.dark]
+primaryColor = "#2BB5C8"
