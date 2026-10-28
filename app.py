@@ -1,6 +1,7 @@
 """Re-Entry & Debris Mitigation Assistant (Streamlit UI). Physics lives in the other modules."""
 import base64
 import html
+import json
 import os
 import urllib.parse
 from pathlib import Path
@@ -94,7 +95,7 @@ footer, [data-testid="stFooter"] { display: none !important; }
 iframe { border-radius: 14px; }
 
 /* glass panels: soft blur, thin glowing border */
-.st-key-summary_card, [class*="st-key-pass_card_"], [data-testid="stExpander"], [data-testid="stPopoverBody"], [data-testid="stForm"] {
+.st-key-summary_card, .st-key-pick_actions, [class*="st-key-pass_card_"], [data-testid="stExpander"], [data-testid="stPopoverBody"], [data-testid="stForm"] {
     background: rgba(12, 20, 44, .55) !important; backdrop-filter: blur(10px) saturate(120%); -webkit-backdrop-filter: blur(10px) saturate(120%);
     border: 1px solid rgba(120, 200, 255, .20) !important; border-radius: 14px !important;
     box-shadow: 0 8px 30px rgba(0, 0, 0, .35), inset 0 0 22px rgba(79, 209, 224, .05); }
@@ -126,7 +127,7 @@ iframe { border-radius: 14px; }
 
 /* motion: cards rise in, pass cards lift on hover, high-risk badge glows */
 @keyframes orbisk-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
-.st-key-summary_card, [class*="st-key-pass_card_"] { animation: orbisk-rise .5s ease backwards; transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease; }
+.st-key-summary_card, .st-key-pick_actions, [class*="st-key-pass_card_"] { animation: orbisk-rise .5s ease backwards; transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease; }
 [class*="st-key-pass_card_"]:hover { transform: translateY(-4px); border-top-color: rgba(79, 209, 224, .55) !important;
     border-right-color: rgba(79, 209, 224, .55) !important; border-bottom-color: rgba(79, 209, 224, .55) !important;
     box-shadow: 0 14px 34px rgba(0, 0, 0, .45), 0 0 22px rgba(79, 209, 224, .25), inset 0 0 22px rgba(79, 209, 224, .08); }
@@ -342,18 +343,29 @@ with tab_watch:
             "Risk score": st.column_config.ImageColumn("Risk score", width="medium"),
         },
     )
+    # clicking a row (any cell, or its tick box) offers two next steps for that satellite
+    switch_targets = []  # tab names to open once this run is done, outermost tab first
+    picked = list(event.selection.rows) or [c[0] if isinstance(c, (tuple, list)) else c.get("row") for c in event.selection.cells]
+    picked_id = table_ids[picked[0]] if picked and picked[0] < len(table_ids) else None
+    if picked_id is not None:
+        with st.container(border=True, key="pick_actions"):
+            p1, p2, p3 = st.columns([2, 1.3, 1.5], vertical_alignment="center")
+            p1.markdown(f"**{records[picked_id]['OBJECT_NAME']}**  \n<span style=\"font-size:.85rem;opacity:.7\">What next?</span>",
+                        unsafe_allow_html=True)
+            go_foot = p2.button("Ground re-entry footprint", key="pick_footprint", type="primary", width="stretch")
+            go_screen = p3.button("Screen for close approaches", key="pick_screen", type="primary", width="stretch")
+        if go_foot or go_screen:
+            st.session_state["_watch_gen"] = st.session_state.get("_watch_gen", 0) + 1  # fresh table next run: clear the selection
+            if go_foot:
+                st.session_state["tracker_obj"] = picked_id
+                switch_targets = ["Re-entry Tracker", "Re-entry footprint"]
+            else:
+                st.session_state["tri_obj"] = picked_id
+                switch_targets = ["Conjunctions & Triage"]
     st.download_button("Download CSV", data=table.assign(**{"NORAD ID": top["NORAD_CAT_ID"].astype(int)})
                        .assign(Level=levels.map({"red": "High", "yellow": "Medium", "green": "Low"}))
                        .to_csv(index=False).encode("utf-8"),
                        file_name="orbisk_watchlist.csv", mime="text/csv")
-    # selecting a row opens that object in the Re-entry Tracker (set once per new selection so the picker stays usable)
-    picked = list(event.selection.rows) or [c[0] if isinstance(c, (tuple, list)) else c.get("row") for c in event.selection.cells]
-    picked_id = table_ids[picked[0]] if picked and picked[0] < len(table_ids) else None
-    switch_target = "Re-entry Tracker" if picked_id is not None and picked_id != st.session_state.get("_watch_picked") else None
-    st.session_state["_watch_picked"] = picked_id
-    if switch_target:
-        st.session_state["tracker_obj"] = picked_id
-        st.session_state["_watch_gen"] = st.session_state.get("_watch_gen", 0) + 1  # fresh table next run: the same row can be clicked again
     if ca_meta is None or not top["ca_screened"].all():
         st.caption("Close-approach columns are filled for the highest-risk objects only (`tools/compute_conjunctions.py`); "
                    "— means not screened or no approach within the threshold.")
@@ -412,7 +424,7 @@ with tab_track:
             if st.button("Screen this object", key="screen_this", type="primary",
                          help="Opens Conjunctions & Triage with this object selected."):
                 st.session_state["tri_obj"] = int(norad)
-                switch_target = "Conjunctions & Triage"
+                switch_targets = ["Conjunctions & Triage"]
 
     with t_decay:
         h0 = float(decay.mean_altitude_km(row["MEAN_MOTION"]))
@@ -772,16 +784,17 @@ if (!P.__orbiskDrag) {
 }
 </script>""", height=0)
 
-if switch_target:  # jump to the chosen tab (Streamlit has no API for this, so click the tab header once the run is done)
+if switch_targets:  # jump to the chosen tab(s) (Streamlit has no API for this, so click the tab headers once the run is done)
     components.html("""<script>
-    const D = window.parent.document;
+    const D = window.parent.document, names = __TARGETS__;
     let tries = 0;
+    const clickTab = (name) => { for (const t of D.querySelectorAll('[role="tab"]')) { if (t.textContent.includes(name)) { t.click(); return; } } };
     const go = setInterval(() => {
       tries += 1;
       const busy = D.querySelector('[data-testid="stStatusWidget"]');
       if (!busy || tries > 150) {
         clearInterval(go);
-        for (const t of D.querySelectorAll('[role="tab"]')) { if (t.textContent.includes("__TARGET__")) { t.click(); break; } }
+        names.forEach((n, i) => setTimeout(() => clickTab(n), i * 250));
       }
     }, 100);
-    </script>""".replace("__TARGET__", switch_target), height=0)
+    </script>""".replace("__TARGETS__", json.dumps(switch_targets)), height=0)

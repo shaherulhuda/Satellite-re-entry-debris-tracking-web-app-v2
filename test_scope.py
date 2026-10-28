@@ -166,3 +166,20 @@ def test_app_starts_with_ten_satellites():
     assert not at.exception
     assert next(n for n in at.number_input if n.label == "Objects").value == 10
     assert len(at.dataframe[0].value) == 10
+
+
+def test_clicking_a_watchlist_row_offers_two_actions():
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file("app.py", default_timeout=400).run()
+    assert not at.exception
+    assert not [b for b in at.button if b.key in ("pick_footprint", "pick_screen")]  # nothing selected yet
+    at.session_state["watch_table_0"] = {"selection": {"rows": [2], "columns": [], "cells": []}}
+    at.run()
+    assert not at.exception
+    assert [b.label for b in at.button if b.key in ("pick_footprint", "pick_screen")] == \
+        ["Ground re-entry footprint", "Screen for close approaches"]
+    shown = next(m.value for m in at.markdown if "What next?" in m.value)
+    top = at.dataframe[0].value["Name"].iloc[2]
+    assert top in shown
+    at.button(key="pick_screen").click().run()  # (AppTest drops the table selection on this run, so only check it does not break)
+    assert not at.exception
