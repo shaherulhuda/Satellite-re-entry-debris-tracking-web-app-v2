@@ -167,11 +167,6 @@ with tab_watch:
         "Range (±×2)": [decay.format_range(lo, hi) for lo, hi in zip(top["decay_days_low"], top["decay_days_high"])],
         "Risk score": top["risk"],
     })
-    st.caption("Decay figures are rough estimates from each object's measured drag (see *How these numbers are computed*). "
-               "Many active satellites (e.g. Starlink) manoeuvre to hold altitude, so their drag-based estimate is not a prediction.")
-    st.caption("Orbits of the listed objects around a rotating Earth (one revolution each; yellow dots = positions now). "
-               "Set \"Debris orbits\" above to draw debris fragments as grey lines and dots (0 = hidden); the globe's control bar can switch them off again. "
-               "The animation loops until you press Pause. Drag to rotate, scroll to zoom.")
     table_ids = tuple(int(i) for i in table["NORAD ID"])
     shown = set(table_ids)
     deb_ids = tuple(int(i) for i in ranked.loc[ranked["source"] == "debris", "NORAD_CAT_ID"] if int(i) not in shown)[:int(n_deb_show)]
