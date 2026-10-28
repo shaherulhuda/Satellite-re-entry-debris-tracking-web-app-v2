@@ -1,5 +1,6 @@
 """Re-Entry & Debris Mitigation Assistant (Streamlit UI). Physics lives in the other modules."""
 import os
+import urllib.parse
 
 import numpy as np
 import pandas as pd
@@ -163,17 +164,32 @@ with tab_watch:
     tier_idx = tuple({"red": 0, "yellow": 1, "green": 2}[l] for l in levels)
     components.html(globe.orbit_html(watchlist_paths(table_ids, tier_idx, tuple(float(r) for r in top["risk"])),
                                      debris=debris_orbit_paths(deb_ids)), height=660)
-    def risk_bar(score: float, width: int = 20) -> str:
-        n = int(round(score / 100 * width))  # filled block sorts above empty, so text sorting follows the score
-        return "▓" * n + "░" * (width - n) + f" {score:.0f}"
+    bar_hex = {"red": "#e5484d", "yellow": "#e0a800", "green": "#30a46c"}
 
-    tier_hex = dict(zip(("red", "yellow", "green"), globe.TIER_COLORS))
-    shown_table = table.assign(**{"Risk score": [risk_bar(s) for s in top["risk"]]})
-    styled = (shown_table.style
-              .apply(lambda col: [f"color: {tier_hex[l]}" for l in levels], subset=["Risk score"])
-              .format({"NORAD ID": "{:d}", "Perigee (km)": "{:.1f}", "Apogee (km)": "{:.1f}", "Inclination (°)": "{:.2f}",
-                       "Closest approach (km)": "{:.2f}", "Rel. speed (km/s)": "{:.2f}"}, na_rep="—"))
-    st.dataframe(styled, width="stretch", hide_index=True)
+    def risk_bar(score: float, level: str) -> str:
+        """Progress-bar image (data URI): track + fill in the level colour + the score. The leading comment holds the
+        zero-padded score so sorting the column orders rows by score."""
+        fill = 150 * score / 100
+        svg = (f'<!--{round(score * 10):04d}--><svg xmlns="http://www.w3.org/2000/svg" width="210" height="28" viewBox="0 0 210 28">'
+               f'<rect x="0" y="11" width="150" height="6" rx="3" fill="#808080" fill-opacity="0.28"/>'
+               f'<rect x="0" y="11" width="{fill:.1f}" height="6" rx="3" fill="{bar_hex[level]}"/>'
+               f'<text x="162" y="18" font-family="Source Sans Pro, Arial, sans-serif" font-size="12" font-weight="600" '
+               f'fill="{bar_hex[level]}">{score:.0f}</text></svg>')
+        return "data:image/svg+xml;utf8," + urllib.parse.quote(svg, safe="")
+
+    shown_table = table.assign(**{"Risk score": [risk_bar(s, l) for s, l in zip(top["risk"], levels)]})
+    st.dataframe(
+        shown_table, width="stretch", hide_index=True,
+        column_config={
+            "NORAD ID": st.column_config.NumberColumn(format="%d"),
+            "Perigee (km)": st.column_config.NumberColumn(format="%.1f"),
+            "Apogee (km)": st.column_config.NumberColumn(format="%.1f"),
+            "Inclination (°)": st.column_config.NumberColumn(format="%.2f"),
+            "Closest approach (km)": st.column_config.NumberColumn(format="%.2f"),
+            "Rel. speed (km/s)": st.column_config.NumberColumn(format="%.2f"),
+            "Risk score": st.column_config.ImageColumn("Risk score", width="medium"),
+        },
+    )
     if ca_meta is None or not top["ca_screened"].all():
         st.caption("Close-approach columns are filled for the highest-risk objects only (`tools/compute_conjunctions.py`); "
                    "— means not screened or no approach within the threshold.")
