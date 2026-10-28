@@ -455,7 +455,23 @@ with st.container(key="ai_fab"):
                             st.markdown(m["content"])
                             if m.get("trace"):
                                 st.caption("Looked up: " + ", ".join(f"{t['tool']}({t['input']})" for t in m["trace"]))
-                    q = st.chat_input("Ask about the catalogue…")
+                    top_sat = sats.sort_values("risk", ascending=False).iloc[0]
+                    suggestions = {  # button label -> question sent to the assistant
+                        "Why is this object ranked first?": f"Why is {top_sat['OBJECT_NAME']} (NORAD {int(top_sat['NORAD_CAT_ID'])}) "
+                                                           "ranked first by risk score?",
+                        "Which satellites re-enter soonest?": "Which satellites have the soonest estimated re-entry?",
+                        "What is perigee and apogee?": "What are perigee and apogee, and why do they matter for re-entry?",
+                    }
+                    asked = None
+                    holder = st.empty()
+                    if not chat_hist:
+                        with holder.container():
+                            for i, (label_, question) in enumerate(suggestions.items()):
+                                if st.button(label_, key=f"ai_suggest_{i}", width="stretch"):
+                                    asked = question
+                        if asked:
+                            holder.empty()  # the chat has started: drop the suggestions
+                    q = st.chat_input("Ask about the catalogue…") or asked
                     if q:
                         with st.chat_message("user"):
                             st.markdown(q)

@@ -110,3 +110,26 @@ def test_object_page_card_subtabs_and_screen_button():
     assert not at.exception
     assert str(at.session_state["tri_obj"]) == re.search(r"\((\d+)\)$", target).group(1)
     assert str(at.selectbox(key="tri_obj").value) == re.search(r"\((\d+)\)$", target).group(1)
+
+
+def test_assistant_has_suggested_question_buttons(monkeypatch):
+    from streamlit.testing.v1 import AppTest
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    at = AppTest.from_file("app.py", default_timeout=400).run()
+    assert not at.exception
+    labels = [b.label for b in at.button if b.key and b.key.startswith("ai_suggest_")]
+    assert labels == ["Why is this object ranked first?", "Which satellites re-enter soonest?", "What is perigee and apogee?"]
+
+
+def test_clicking_a_suggestion_asks_the_assistant(monkeypatch):
+    from streamlit.testing.v1 import AppTest
+    import llm as llm_mod
+    seen = []
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    monkeypatch.setattr(llm_mod, "make_client", lambda key=None: object())
+    monkeypatch.setattr(llm_mod, "chat", lambda c, model, ctx, hist, q: (seen.append(q), ("ok", [], {"input_tokens": 1, "output_tokens": 1}))[1])
+    at = AppTest.from_file("app.py", default_timeout=400).run()
+    at.button(key="ai_suggest_1").click().run()
+    assert not at.exception
+    assert seen == ["Which satellites have the soonest estimated re-entry?"]
+    assert not [b for b in at.button if b.key and b.key.startswith("ai_suggest_")]  # hidden once the chat has started
