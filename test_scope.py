@@ -13,6 +13,15 @@ import llm
 SEC_TRACK, SEC_TRIAGE = "📉 Re-entry Tracker", "⚠️ Conjunctions & Triage"
 
 
+def open_app(timeout=400, entered=True):
+    """The app past its cover page (the cover is shown first in a real session)."""
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file("app.py", default_timeout=timeout)
+    if entered:
+        at.session_state["entered"] = True
+    return at
+
+
 @pytest.fixture(scope="module")
 def world():
     cat, recs = dataset.load_catalogue()
@@ -46,7 +55,7 @@ def test_app_lists_and_pickers_are_satellites_only():
     from streamlit.testing.v1 import AppTest
     cat, _ = dataset.load_catalogue()
     deb = set(cat[cat.source == "debris"].NORAD_CAT_ID)
-    at = AppTest.from_file("app.py", default_timeout=400).run()
+    at = open_app(400).run()
     assert not at.exception
     table = at.dataframe[0].value
     deb_names = set(cat[cat.source == "debris"].OBJECT_NAME)
@@ -58,7 +67,7 @@ def test_app_lists_and_pickers_are_satellites_only():
     full["risk"] = decay.risk_score(decay.risk_components(full))
     pool = full[full.source == "active"].sort_values("risk", ascending=False).head(50).NORAD_CAT_ID.astype(int).tolist()
     for section, label in ((SEC_TRACK, "Object"), (SEC_TRIAGE, "Object to screen")):  # only the section on screen is built
-        other = AppTest.from_file("app.py", default_timeout=400)
+        other = open_app(400)
         other.session_state["section"] = section
         other.run()
         assert not other.exception
@@ -104,7 +113,7 @@ def test_suggested_action_rules():
 
 def test_object_page_card_subtabs_and_screen_button():
     from streamlit.testing.v1 import AppTest
-    at = AppTest.from_file("app.py", default_timeout=400)
+    at = open_app(400)
     at.session_state["section"] = SEC_TRACK
     at.run()
     assert not at.exception
@@ -124,7 +133,7 @@ def test_object_page_card_subtabs_and_screen_button():
 def test_assistant_has_suggested_question_buttons(monkeypatch):
     from streamlit.testing.v1 import AppTest
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
-    at = AppTest.from_file("app.py", default_timeout=400).run()
+    at = open_app(400).run()
     assert not at.exception
     labels = [b.label for b in at.button if b.key and b.key.startswith("ai_suggest_")]
     assert labels == ["Why is this object ranked first?", "Which satellites re-enter soonest?", "What is perigee and apogee?"]
@@ -137,7 +146,7 @@ def test_clicking_a_suggestion_asks_the_assistant(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
     monkeypatch.setattr(llm_mod, "make_client", lambda key=None: object())
     monkeypatch.setattr(llm_mod, "chat", lambda c, model, ctx, hist, q: (seen.append(q), ("ok", [], {"input_tokens": 1, "output_tokens": 1}))[1])
-    at = AppTest.from_file("app.py", default_timeout=400).run()
+    at = open_app(400).run()
     at.button(key="ai_suggest_1").click().run()
     assert not at.exception
     assert seen == ["Which satellites have the soonest estimated re-entry?"]
@@ -157,7 +166,7 @@ def test_triage_cards_and_bands():
 
 def test_triage_shows_intro_then_cards_table_and_csv():
     from streamlit.testing.v1 import AppTest
-    at = AppTest.from_file("app.py", default_timeout=600)
+    at = open_app(600)
     at.session_state["section"] = SEC_TRIAGE
     at.run()
     assert any(m.value == "Pick a satellite, a time window and a distance; Orbisk lists the closest passes." for m in at.markdown)
@@ -172,7 +181,7 @@ def test_triage_shows_intro_then_cards_table_and_csv():
 
 def test_app_starts_with_ten_satellites():
     from streamlit.testing.v1 import AppTest
-    at = AppTest.from_file("app.py", default_timeout=400).run()
+    at = open_app(400).run()
     assert not at.exception
     assert next(n for n in at.number_input if n.label == "Objects").value == 10
     assert len(at.dataframe[0].value) == 10
@@ -180,7 +189,7 @@ def test_app_starts_with_ten_satellites():
 
 def test_clicking_a_watchlist_row_offers_two_actions():
     from streamlit.testing.v1 import AppTest
-    at = AppTest.from_file("app.py", default_timeout=400).run()
+    at = open_app(400).run()
     assert not at.exception
     assert not [b for b in at.button if b.key in ("pick_footprint", "pick_screen")]  # nothing selected yet
     at.session_state["watch_table_0"] = {"selection": {"rows": [2], "columns": [], "cells": []}}
@@ -202,7 +211,7 @@ def test_assistant_allows_ten_questions_per_session(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
     monkeypatch.setattr(llm_mod, "make_client", lambda key=None: object())
     monkeypatch.setattr(llm_mod, "chat", lambda c, model, ctx, hist, q: (seen.append(q), ("ok", [], {"input_tokens": 1, "output_tokens": 1}))[1])
-    at = AppTest.from_file("app.py", default_timeout=400)
+    at = open_app(400)
     at.session_state["ai_requests"] = 9          # the tenth question is still allowed
     at.run()
     assert any("9/10 questions used" in c.value for c in at.caption)
@@ -214,7 +223,7 @@ def test_assistant_allows_ten_questions_per_session(monkeypatch):
 
 def test_screen_this_object_runs_the_screening():
     from streamlit.testing.v1 import AppTest
-    at = AppTest.from_file("app.py", default_timeout=600)
+    at = open_app(600)
     at.session_state["section"] = SEC_TRACK
     at.run()
     assert not at.exception
@@ -223,3 +232,17 @@ def test_screen_this_object_runs_the_screening():
     assert not at.exception
     assert any("Closest passes" in m.value for m in at.markdown)  # results are shown without pressing Run screening
     assert at.session_state["tri_asset"]["asset"] == int(at.selectbox(key="tri_obj").value)
+
+
+def test_cover_page_comes_first_and_enter_opens_the_watchlist():
+    at = open_app(400, entered=False).run()
+    assert not at.exception
+    assert any("Which satellites are coming down" in m.value for m in at.markdown)
+    assert at.button(key="enter_btn").label.startswith("Enter Watchlist")
+    assert not at.dataframe and not at.segmented_control  # nothing of the app is built behind the cover
+    assert not any(b.key == "ai_suggest_0" for b in at.button)
+    at.button(key="enter_btn").click().run()
+    assert not at.exception
+    assert at.segmented_control(key="section").value == "🛰️ Watchlist" and len(at.dataframe) == 1
+    assert not any("Which satellites are coming down" in m.value for m in at.markdown)
+    assert any("orbisk-header" in m.value for m in at.markdown)  # the normal header replaces the cover

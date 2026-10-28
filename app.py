@@ -17,72 +17,7 @@ def _data_uri(name: str) -> str:
 
 st.set_page_config(page_title="Orbisk: Re-Entry & Debris Mitigation", page_icon=str(ASSETS / "orbisk-icon.png"), layout="wide")
 
-# Loading screen: shown first (before the heavy imports and data load) on the first run of a session, replacing Streamlit's
-# grey placeholder bars. It removes itself when the data is ready, and fades away by itself after 25 s so an error can never stay hidden.
-boot = st.empty()
-if "_booted" not in st.session_state:
-    boot.markdown(
-        """<style>
-        .orbisk-boot { position: fixed; inset: 0; z-index: 100000; display: flex; flex-direction: column; align-items: center; justify-content: center;
-            gap: 1.6rem; background: radial-gradient(ellipse at 70% 60%, #12224a 0%, #070b1a 62%); animation: orbisk-boot-out .6s ease 25s forwards; }
-        .orbisk-boot img { height: 64px; width: auto; }
-        .orbisk-boot .orbit { position: relative; width: 96px; height: 96px; }
-        .orbisk-boot .orbit i { position: absolute; border-radius: 50%; }
-        .orbisk-boot .planet { inset: 30px; background: radial-gradient(circle at 35% 30%, #5FE0C8, #14456B); animation: orbisk-beat 1.8s ease-in-out infinite; }
-        .orbisk-boot .ring { inset: 0; border: 1.5px solid rgba(79, 209, 224, .55); animation: orbisk-spin 1.6s linear infinite;
-            background: radial-gradient(circle at 50% 0, #FF7A3D 0 4px, transparent 5px); }
-        .orbisk-boot .ripple { inset: 0; border: 1px solid rgba(79, 209, 224, .5); animation: orbisk-ripple 1.8s ease-out infinite; }
-        .orbisk-boot p { margin: 0; font-size: .9rem; letter-spacing: .08em; color: rgba(232, 238, 252, .7); }
-        @keyframes orbisk-spin { to { transform: rotate(360deg); } }
-        @keyframes orbisk-beat { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.18); } }
-        @keyframes orbisk-ripple { from { transform: scale(.6); opacity: .9; } to { transform: scale(1.5); opacity: 0; } }
-        @keyframes orbisk-boot-out { to { opacity: 0; visibility: hidden; pointer-events: none; } }
-        </style>"""
-        + '<div class="orbisk-boot">'
-        + f'<img alt="Orbisk" src="{_data_uri("orbisk-logo-for-dark.png")}">'
-        + '<div class="orbit"><i class="ripple"></i><i class="planet"></i><i class="ring"></i></div>'
-        + "<p>LOADING ORBITAL DATA</p></div>",
-        unsafe_allow_html=True,
-    )
-
-import numpy as np  # noqa: E402  (imported after the loading screen so it appears immediately)
-import pandas as pd  # noqa: E402
-import streamlit.components.v1 as components  # noqa: E402
-from sgp4.api import jday  # noqa: E402
-
-import charts  # noqa: E402
-import conjunction  # noqa: E402
-import dataset  # noqa: E402
-import decay  # noqa: E402
-import footprint  # noqa: E402
-import globe  # noqa: E402
-import history  # noqa: E402
-import llm  # noqa: E402
-import orbits  # noqa: E402
-import triage  # noqa: E402
-
-WATCHLIST_SIZE = 50  # the watchlist always shows the 50 highest-risk active satellites
-
-
-@st.cache_data
-def get_data():
-    """Active satellites + every debris group, with the stored closest-approach results attached."""
-    cat, recs = dataset.load_catalogue()
-    ca = dataset.load_closest_approaches()
-    meta = {k: ca[k] for k in ("start_utc", "window_hours", "threshold_km", "top")} if ca else None
-    return dataset.attach_closest_approaches(cat, ca), recs, meta
-
-
-@st.cache_data
-def get_history():
-    return history.load_history()
-
-
-df, records, ca_meta = get_data()
-hist_all = get_history()
-components_df = decay.risk_components(df)
-boot.empty()  # data is ready: remove the loading screen
-st.session_state["_booted"] = True
+entered = bool(st.session_state.get("entered", False))
 
 _CSS = """<style>
 /* ---- space look: starfield page, glass panels, pill tabs, matching scrollbars, tooltips and motion ---- */
@@ -188,15 +123,153 @@ h4 { font-size: 1.2rem !important; }
     border: 1.5px solid rgba(79, 209, 224, .55); box-sizing: border-box; animation: orbisk-orbit 1.2s linear infinite;
     background: radial-gradient(circle at 50% 0, #FF7A3D 0 2.6px, transparent 3.2px); }
 @keyframes orbisk-orbit { to { transform: rotate(360deg); } }
+
+/* cover page: shown first, until "Enter Watchlist" is pressed */
+.orbisk-cover { text-align: center; max-width: 980px; margin: 0 auto; padding-top: 1.2rem; }
+.orbisk-cover .hero { position: relative; height: 250px; margin-bottom: .6rem; }
+.orbisk-cover .orbit { position: absolute; left: 50%; top: 50%; border-radius: 50%; transform: translate(-50%, -50%); }
+.orbisk-cover .planet { width: 118px; height: 118px; background: radial-gradient(circle at 35% 30%, #5FE0C8, #3FA796 45%, #14456B);
+    box-shadow: 0 0 50px rgba(79, 209, 224, .35); animation: orbisk-breathe 6s ease-in-out infinite; }
+.orbisk-cover .ring { border: 1.5px solid rgba(79, 209, 224, .4); animation: orbisk-orbit 16s linear infinite; }
+.orbisk-cover .ring.r1 { width: 190px; height: 190px; background: radial-gradient(circle at 50% 0, #FF7A3D 0 5px, transparent 6px); animation-duration: 9s; }
+.orbisk-cover .ring.r2 { width: 250px; height: 250px; border-color: rgba(255, 122, 61, .28); animation-direction: reverse;
+    background: radial-gradient(circle at 50% 0, #4FD1E0 0 4px, transparent 5px); }
+.orbisk-cover .ring.r3 { width: 320px; height: 320px; border-style: dashed; border-color: rgba(190, 215, 255, .16); animation-duration: 28s;
+    background: radial-gradient(circle at 50% 0, #ffffff 0 3px, transparent 4px); }
+.orbisk-cover img.logo { height: 58px; width: auto; margin-bottom: 1rem; }
+.orbisk-cover h1 { font-size: clamp(1.7rem, 4.2vw, 2.7rem); line-height: 1.2; margin: .2rem 0 .9rem; font-weight: 700; letter-spacing: -.01em;
+    text-shadow: 0 0 30px rgba(79, 209, 224, .25); }
+.orbisk-cover .lead { font-size: 1.1rem; line-height: 1.55; color: rgba(232, 238, 252, .82); max-width: 740px; margin: 0 auto 1.6rem; }
+.orbisk-cover .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; text-align: left; margin-bottom: 1.8rem; }
+.orbisk-cover .ccard { background: rgba(12, 20, 44, .55); backdrop-filter: blur(10px); border: 1px solid rgba(120, 200, 255, .2); border-radius: 14px;
+    padding: 1rem 1.1rem; box-shadow: 0 8px 30px rgba(0, 0, 0, .35), inset 0 0 22px rgba(79, 209, 224, .05); transition: transform .2s ease, border-color .2s ease; }
+.orbisk-cover .ccard:hover { transform: translateY(-4px); border-color: rgba(79, 209, 224, .55); }
+.orbisk-cover .ccard b { display: block; font-size: 1.02rem; margin-bottom: .3rem; }
+.orbisk-cover .ccard p { margin: 0; font-size: .9rem; line-height: 1.45; color: rgba(232, 238, 252, .75); }
+.orbisk-cover .fine { font-size: .8rem; color: rgba(232, 238, 252, .5); margin-top: 1.2rem; }
+.orbisk-cover > * { animation: orbisk-rise .7s ease backwards; }
+.orbisk-cover > :nth-child(2) { animation-delay: .1s; } .orbisk-cover > :nth-child(3) { animation-delay: .2s; }
+.orbisk-cover > :nth-child(4) { animation-delay: .3s; } .orbisk-cover > :nth-child(5) { animation-delay: .4s; }
+.st-key-enter_btn { max-width: 460px; margin: 0 auto; }
+.st-key-enter_btn button { font-size: 1.3rem; font-weight: 700; padding: .95rem 1.5rem; border-radius: 999px; letter-spacing: .01em;
+    box-shadow: 0 0 30px rgba(43, 181, 200, .55); animation: orbisk-cta 2.6s ease-in-out infinite; }
+.st-key-enter_btn button p { font-size: 1.3rem; font-weight: 700; }
+.st-key-enter_btn button:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 0 44px rgba(79, 209, 224, .8); }
+@keyframes orbisk-orbit { to { transform: translate(-50%, -50%) rotate(360deg); } }
+@keyframes orbisk-breathe { 0%, 100% { transform: translate(-50%, -50%) scale(1); } 50% { transform: translate(-50%, -50%) scale(1.06); } }
+@keyframes orbisk-cta { 0%, 100% { box-shadow: 0 0 22px rgba(43, 181, 200, .45); } 50% { box-shadow: 0 0 42px rgba(43, 181, 200, .85); } }
+@media (max-width: 760px) { .orbisk-cover .cards { grid-template-columns: 1fr; } .orbisk-cover .hero { height: 200px; } }
 </style>""".replace("__BG__", _data_uri("orbisk-bg.jpg")).replace("__ICON__", _data_uri("orbisk-mark.png"))
 # one unindented line of HTML: indented or multi-line HTML is rendered by markdown as a code block
 st.markdown(
     _CSS
-    + '<div class="orbisk-header">'
-    + f'<img alt="Orbisk" src="{_data_uri("orbisk-logo-for-dark.png")}">'
-    + '<div class="tagline">Re-entry &amp; debris<br>mitigation assistant</div></div>',
+    + (
+        '<div class="orbisk-header">'
+        + f'<img alt="Orbisk" src="{_data_uri("orbisk-logo-for-dark.png")}">'
+        + '<div class="tagline">Re-entry &amp; debris<br>mitigation assistant</div></div>'
+        if entered else ""
+    ),
     unsafe_allow_html=True,
 )
+
+
+
+def _enter():
+    st.session_state["entered"] = True
+    st.session_state["section"] = "🛰️ Watchlist"
+
+
+if not entered:
+    # the cover: one-line HTML pieces (indented or multi-line HTML would be shown as code)
+    st.markdown(
+        '<div class="orbisk-cover">'
+        '<div class="hero"><i class="orbit ring r3"></i><i class="orbit ring r2"></i><i class="orbit ring r1"></i><i class="orbit planet"></i></div>'
+        f'<div><img class="logo" alt="Orbisk" src="{_data_uri("orbisk-logo-for-dark.png")}"></div>'
+        '<div><h1>Which satellites are coming down, and what could they hit?</h1>'
+        '<p class="lead">Orbisk ranks the 50 highest-risk active satellites in low Earth orbit, estimates when each might re-enter the atmosphere, '
+        'and screens them for close approaches with other satellites and space debris.</p></div>'
+        '<div class="cards">'
+        '<div class="ccard"><b>🛰️ Watchlist</b><p>The 50 highest-risk satellites, ranked and colour-coded: 10 red, 30 yellow, 10 green. Pick one to dig in.</p></div>'
+        '<div class="ccard"><b>📉 Re-entry Tracker</b><p>See an orbit in 3D, how fast it is decaying, and the latitudes it can come down over.</p></div>'
+        '<div class="ccard"><b>⚠️ Conjunctions &amp; Triage</b><p>Screen one satellite against every other satellite and debris fragment for close passes in the next 1 to 30 days.</p></div>'
+        '</div></div>',
+        unsafe_allow_html=True,
+    )
+    _l, _m, _r = st.columns([1, 1.6, 1])
+    _m.button("Enter Watchlist  →", key="enter_btn", type="primary", on_click=_enter, width="stretch")
+    st.markdown(
+        '<div class="orbisk-cover"><p class="fine">Built on public CelesTrak element sets. Estimates and screening are triage aids, not operational decisions.</p></div>',
+        unsafe_allow_html=True,
+    )
+
+# Loading screen: shown first (before the heavy imports and data load) on the first run of a session, replacing Streamlit's
+# grey placeholder bars. It removes itself when the data is ready, and fades away by itself after 25 s so an error can never stay hidden.
+boot = st.empty()
+if entered and "_booted" not in st.session_state:
+    boot.markdown(
+        """<style>
+        .orbisk-boot { position: fixed; inset: 0; z-index: 100000; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            gap: 1.6rem; background: radial-gradient(ellipse at 70% 60%, #12224a 0%, #070b1a 62%); animation: orbisk-boot-out .6s ease 25s forwards; }
+        .orbisk-boot img { height: 64px; width: auto; }
+        .orbisk-boot .orbit { position: relative; width: 96px; height: 96px; }
+        .orbisk-boot .orbit i { position: absolute; border-radius: 50%; }
+        .orbisk-boot .planet { inset: 30px; background: radial-gradient(circle at 35% 30%, #5FE0C8, #14456B); animation: orbisk-beat 1.8s ease-in-out infinite; }
+        .orbisk-boot .ring { inset: 0; border: 1.5px solid rgba(79, 209, 224, .55); animation: orbisk-spin 1.6s linear infinite;
+            background: radial-gradient(circle at 50% 0, #FF7A3D 0 4px, transparent 5px); }
+        .orbisk-boot .ripple { inset: 0; border: 1px solid rgba(79, 209, 224, .5); animation: orbisk-ripple 1.8s ease-out infinite; }
+        .orbisk-boot p { margin: 0; font-size: .9rem; letter-spacing: .08em; color: rgba(232, 238, 252, .7); }
+        @keyframes orbisk-spin { to { transform: rotate(360deg); } }
+        @keyframes orbisk-beat { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.18); } }
+        @keyframes orbisk-ripple { from { transform: scale(.6); opacity: .9; } to { transform: scale(1.5); opacity: 0; } }
+        @keyframes orbisk-boot-out { to { opacity: 0; visibility: hidden; pointer-events: none; } }
+        </style>"""
+        + '<div class="orbisk-boot">'
+        + f'<img alt="Orbisk" src="{_data_uri("orbisk-logo-for-dark.png")}">'
+        + '<div class="orbit"><i class="ripple"></i><i class="planet"></i><i class="ring"></i></div>'
+        + "<p>LOADING ORBITAL DATA</p></div>",
+        unsafe_allow_html=True,
+    )
+
+import numpy as np  # noqa: E402  (imported after the loading screen so it appears immediately)
+import pandas as pd  # noqa: E402
+import streamlit.components.v1 as components  # noqa: E402
+from sgp4.api import jday  # noqa: E402
+
+import charts  # noqa: E402
+import conjunction  # noqa: E402
+import dataset  # noqa: E402
+import decay  # noqa: E402
+import footprint  # noqa: E402
+import globe  # noqa: E402
+import history  # noqa: E402
+import llm  # noqa: E402
+import orbits  # noqa: E402
+import triage  # noqa: E402
+
+WATCHLIST_SIZE = 50  # the watchlist always shows the 50 highest-risk active satellites
+
+
+@st.cache_data
+def get_data():
+    """Active satellites + every debris group, with the stored closest-approach results attached."""
+    cat, recs = dataset.load_catalogue()
+    ca = dataset.load_closest_approaches()
+    meta = {k: ca[k] for k in ("start_utc", "window_hours", "threshold_km", "top")} if ca else None
+    return dataset.attach_closest_approaches(cat, ca), recs, meta
+
+
+@st.cache_data
+def get_history():
+    return history.load_history()
+
+
+df, records, ca_meta = get_data()
+hist_all = get_history()
+components_df = decay.risk_components(df)
+boot.empty()  # data is ready: remove the loading screen
+st.session_state["_booted"] = True
+if not entered:
+    st.stop()  # the cover has been shown while the data warmed up; nothing else is built until "Enter Watchlist"
 
 SEC_WATCH, SEC_TRACK, SEC_TRIAGE = "🛰️ Watchlist", "📉 Re-entry Tracker", "⚠️ Conjunctions & Triage"
 VIEW_ORBIT, VIEW_DECAY, VIEW_FOOT = "Orbit", "Decay", "Re-entry footprint"
