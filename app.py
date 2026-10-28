@@ -163,18 +163,17 @@ with tab_watch:
     tier_idx = tuple({"red": 0, "yellow": 1, "green": 2}[l] for l in levels)
     components.html(globe.orbit_html(watchlist_paths(table_ids, tier_idx, tuple(float(r) for r in top["risk"])),
                                      debris=debris_orbit_paths(deb_ids)), height=660)
-    st.dataframe(
-        table, width="stretch", hide_index=True,
-        column_config={
-            "NORAD ID": st.column_config.NumberColumn(format="%d"),
-            "Perigee (km)": st.column_config.NumberColumn(format="%.1f"),
-            "Apogee (km)": st.column_config.NumberColumn(format="%.1f"),
-            "Inclination (°)": st.column_config.NumberColumn(format="%.2f"),
-            "Closest approach (km)": st.column_config.NumberColumn(format="%.2f"),
-            "Rel. speed (km/s)": st.column_config.NumberColumn(format="%.2f"),
-            "Risk score": st.column_config.ProgressColumn(format="%.0f", min_value=0, max_value=100),
-        },
-    )
+    def risk_bar(score: float, width: int = 20) -> str:
+        n = int(round(score / 100 * width))  # filled block sorts above empty, so text sorting follows the score
+        return "▓" * n + "░" * (width - n) + f" {score:.0f}"
+
+    tier_hex = dict(zip(("red", "yellow", "green"), globe.TIER_COLORS))
+    shown_table = table.assign(**{"Risk score": [risk_bar(s) for s in top["risk"]]})
+    styled = (shown_table.style
+              .apply(lambda col: [f"color: {tier_hex[l]}" for l in levels], subset=["Risk score"])
+              .format({"NORAD ID": "{:d}", "Perigee (km)": "{:.1f}", "Apogee (km)": "{:.1f}", "Inclination (°)": "{:.2f}",
+                       "Closest approach (km)": "{:.2f}", "Rel. speed (km/s)": "{:.2f}"}, na_rep="—"))
+    st.dataframe(styled, width="stretch", hide_index=True)
     if ca_meta is None or not top["ca_screened"].all():
         st.caption("Close-approach columns are filled for the highest-risk objects only (`tools/compute_conjunctions.py`); "
                    "— means not screened or no approach within the threshold.")
