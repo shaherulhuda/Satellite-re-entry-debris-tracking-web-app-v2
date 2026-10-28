@@ -44,11 +44,6 @@ hist_all = get_history()
 components_df = decay.risk_components(df)
 
 st.title("Re-Entry & Debris Mitigation Assistant")
-n_deb = int((df["source"] == "debris").sum())
-manifest = snapshot.load_manifest()
-st.caption(f"Data snapshot from {orbits.snapshot_date(df)} · {len(df):,} objects"
-           + (f" (including {n_deb:,} debris fragments)" if n_deb else "")
-           + (f" · all sets downloaded together {manifest['fetched_utc'][:16].replace('T', ' ')} UTC" if manifest else ""))
 health = snapshot.health(df)
 with st.expander("Data sets and snapshot consistency"):
     st.dataframe(pd.DataFrame({
