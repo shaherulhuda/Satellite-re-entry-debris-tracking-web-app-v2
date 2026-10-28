@@ -461,11 +461,11 @@ st.markdown(
         background-color: transparent !important; border: 0 !important; box-shadow: none !important; }
     .st-key-ai_fab button > * { display: none; }
     .st-key-ai_fab { touch-action: none; cursor: grab; }
-    /* tooltip drawn in CSS (a native title tooltip is slow and unreliable); hidden while the popup is open */
-    .st-key-ai_fab:hover::after { content: "Ask Orbisk AI"; position: absolute; top: calc(100% + 4px); right: 0; white-space: nowrap;
-        padding: 4px 10px; border-radius: 6px; font-size: .85rem; line-height: 1.3; pointer-events: none;
-        background: #0a0e1f; color: #f2f5fb; box-shadow: 0 2px 8px rgba(0,0,0,.35); }
-    .st-key-ai_fab:has(button[aria-expanded="true"]):hover::after { display: none; }
+    /* label under the floating icon (white pill, readable on light and dark); hidden while the popup is open */
+    .st-key-ai_fab::after { content: "Ask Orbisk AI"; position: absolute; top: calc(100% + 2px); left: 50%; transform: translateX(-50%);
+        white-space: nowrap; padding: 3px 10px; border-radius: 999px; font-size: .75rem; font-weight: 600; line-height: 1.3;
+        pointer-events: none; background: #ffffff; color: #0a0e1f; box-shadow: 0 1px 6px rgba(0,0,0,.35); }
+    .st-key-ai_fab:has(button[aria-expanded="true"])::after { display: none; }
     /* tables are read-only: hide the cell pop-up box that would otherwise linger while a clicked row opens the tracker */
     [class*="gdg-"]:has(> .gdg-clip-region) { display: none !important; }
     /* one size scale: headings 1.35rem, numbers 1.5rem, labels and card detail 0.85-0.9rem */
@@ -628,7 +628,7 @@ if (!P.__orbiskDrag) {
   new MutationObserver(nameButton).observe(D.body, {childList: true, subtree: true});
   const apply = (x, y) => {
     const w = 56, h = 56;
-    x = Math.min(Math.max(8, x), Math.max(8, P.innerWidth - w - 8)); y = Math.min(Math.max(60, y), Math.max(60, P.innerHeight - h - 8));  // keep clear of Streamlit's top bar
+    x = Math.min(Math.max(24, x), Math.max(24, P.innerWidth - w - 24)); y = Math.min(Math.max(60, y), Math.max(60, P.innerHeight - h - 30));  // keep clear of Streamlit's top bar
     style.textContent = `.st-key-ai_fab{left:${x}px !important;top:${y}px !important;right:auto !important;}`;
     return [x, y];
   };
