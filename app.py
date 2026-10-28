@@ -51,20 +51,21 @@ df, records, ca_meta = get_data()
 hist_all = get_history()
 components_df = decay.risk_components(df)
 
+_LOGO_CSS = """<style>
+.orbisk-logo { text-align: center; margin: -1rem 0 .5rem; }
+.orbisk-logo img { height: 64px; width: auto; }
+.orbisk-logo .for-light { display: none; }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .orbisk-logo .for-dark { display: none; }
+  :root:not([data-theme="dark"]) .orbisk-logo .for-light { display: inline; }
+}
+</style>"""
+# one unindented line of HTML: indented or multi-line HTML is rendered by markdown as a code block
 st.markdown(
-    f"""<style>
-    .orbisk-logo {{ text-align: center; margin: -1rem 0 .5rem; }}
-    .orbisk-logo img {{ height: 64px; width: auto; }}
-    .orbisk-logo .for-light {{ display: none; }}
-    @media (prefers-color-scheme: light) {{
-        :root:not([data-theme="dark"]) .orbisk-logo .for-dark {{ display: none; }}
-        :root:not([data-theme="dark"]) .orbisk-logo .for-light {{ display: inline; }}
-    }}
-    </style>
-    <div class="orbisk-logo" role="img" aria-label="Orbisk: Re-Entry & Debris Mitigation">
-      <img class="for-dark" alt="Orbisk" src="{_data_uri('orbisk-logo-for-dark.png')}">
-      <img class="for-light" alt="Orbisk" src="{_data_uri('orbisk-logo-for-light.png')}">
-    </div>""",
+    _LOGO_CSS
+    + '<div class="orbisk-logo" role="img" aria-label="Orbisk: Re-Entry &amp; Debris Mitigation">'
+    + f'<img class="for-dark" alt="Orbisk" src="{_data_uri("orbisk-logo-for-dark.png")}">'
+    + f'<img class="for-light" alt="Orbisk" src="{_data_uri("orbisk-logo-for-light.png")}"></div>',
     unsafe_allow_html=True,
 )
 
@@ -343,12 +344,13 @@ st.markdown(
     .st-key-ai_fab button { width: 3.5rem; height: 3.5rem; padding: 0; border-radius: 16px; border: 0; font-size: 0;
         background: url(__ICON__) center / cover no-repeat; box-shadow: 0 2px 10px rgba(0,0,0,.35); }
     .st-key-ai_fab button > * { display: none; }
+    .st-key-ai_fab { touch-action: none; cursor: grab; }
     [data-testid="stPopoverBody"] { width: min(520px, 92vw); max-height: calc(100vh - 8rem); overflow-y: auto; }
     </style>""".replace("__ICON__", _data_uri("orbisk-icon.png")),
     unsafe_allow_html=True,
 )
 with st.container(key="ai_fab"):
-    with st.popover("Ask the Orbisk assistant", help="Ask the Orbisk assistant"):
+    with st.popover("Ask the Orbisk assistant"):
         st.caption("Optional. The app is fully offline without this. When you add an Anthropic API key the assistant can "
                    "explain results in plain language. It never calculates orbits: it only sees numbers this app computed, "
                    "or looks data up through the app's own functions.")
@@ -456,3 +458,45 @@ with st.expander("How these numbers are computed"):
         "- **Limits:** one element set per object (no history until snapshots are added), mean elements are only km-accurate, "
         "and active satellites that manoeuvre invalidate drag-based decay estimates."
     )
+
+# make the launcher draggable: script runs in a same-origin iframe and drives the parent page; the position is kept in
+# a <style> tag in the parent head (survives Streamlit re-renders) and in localStorage
+components.html("""<script>
+const P = window.parent, D = P.document, KEY = "orbisk_fab_pos";
+if (!P.__orbiskDrag) {
+  P.__orbiskDrag = true;
+  const style = D.createElement("style");
+  D.head.appendChild(style);
+  const apply = (x, y) => {
+    const w = 56, h = 56;
+    x = Math.min(Math.max(0, x), P.innerWidth - w); y = Math.min(Math.max(0, y), P.innerHeight - h);
+    style.textContent = `.st-key-ai_fab{left:${x}px !important;top:${y}px !important;right:auto !important;}`;
+    return [x, y];
+  };
+  try { const s = JSON.parse(P.localStorage.getItem(KEY)); if (s) apply(s[0], s[1]); } catch (e) {}
+  let drag = null;
+  D.addEventListener("pointerdown", (e) => {
+    const fab = e.target.closest(".st-key-ai_fab");
+    if (!fab || e.button > 0) return;
+    const r = fab.getBoundingClientRect();
+    drag = {dx: e.clientX - r.left, dy: e.clientY - r.top, x0: e.clientX, y0: e.clientY, moved: false};
+  }, true);
+  D.addEventListener("pointermove", (e) => {
+    if (!drag) return;
+    if (!drag.moved && Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) < 6) return;
+    drag.moved = true;
+    drag.pos = apply(e.clientX - drag.dx, e.clientY - drag.dy);
+    e.preventDefault();
+  }, true);
+  D.addEventListener("pointerup", () => {
+    if (drag && drag.moved) {
+      try { P.localStorage.setItem(KEY, JSON.stringify(drag.pos)); } catch (e) {}
+      const swallow = (ev) => { ev.stopPropagation(); ev.preventDefault(); };  // a drag must not open the popup
+      D.addEventListener("click", swallow, {capture: true, once: true});
+      setTimeout(() => D.removeEventListener("click", swallow, true), 300);
+    }
+    drag = null;
+  }, true);
+  P.addEventListener("resize", () => { try { const s = JSON.parse(P.localStorage.getItem(KEY)); if (s) apply(s[0], s[1]); } catch (e) {} });
+}
+</script>""", height=0)
