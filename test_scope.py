@@ -46,7 +46,10 @@ def test_app_lists_and_pickers_are_satellites_only():
     at = AppTest.from_file("app.py", default_timeout=400).run()
     assert not at.exception
     table = at.dataframe[0].value
-    assert not table["Name"].str.contains("DEB").any() and not table["Type"].eq("debris").any()
+    deb_names = set(cat[cat.source == "debris"].OBJECT_NAME)
+    assert not table["Name"].str.contains("DEB").any() and not set(table["Name"]) & deb_names
+    # the table fits on screen: no NORAD ID, Type or With columns, and the risk bar is present
+    assert not {"NORAD ID", "Type", "With"} & set(table.columns) and "Risk score" in table.columns
     for box in at.selectbox:
         if box.label in ("Object", "Object to screen"):
             ids = [int(re.search(r"\((\d+)\)$", o).group(1)) for o in box.options]

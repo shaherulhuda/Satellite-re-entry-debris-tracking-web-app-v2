@@ -154,15 +154,15 @@ with tab_watch:
     hours_txt = ["—" if pd.isna(h) else f"{h:.1f} h" for h in top["ca_hours"]]
     table = pd.DataFrame({
         "Level": levels.map(LEVEL_LABEL),
-        "Name": top["OBJECT_NAME"], "NORAD ID": top["NORAD_CAT_ID"], "Type": top["type"],
+        "Name": top["OBJECT_NAME"],
         "Perigee (km)": top["perigee_km"], "Apogee (km)": top["apogee_km"], "Inclination (°)": top["INCLINATION"],
         "Est. time to re-entry": top["decay_days"].map(decay.format_days),
         "Range (±×2)": [decay.format_range(lo, hi) for lo, hi in zip(top["decay_days_low"], top["decay_days_high"])],
         "Closest approach (km)": top["ca_miss_km"], "Rel. speed (km/s)": top["ca_speed_km_s"],
-        "Time to closest approach": hours_txt, "With": top["ca_with"].fillna("—"),
+        "Time to closest approach": hours_txt,
         "Risk score": top["risk"],
     })
-    table_ids = tuple(int(i) for i in table["NORAD ID"])
+    table_ids = tuple(int(i) for i in top["NORAD_CAT_ID"])
     debris_ranked = sort_by_mode(scored[scored["source"] == "debris"])
     deb_ids = tuple(int(i) for i in debris_ranked["NORAD_CAT_ID"])[:int(n_deb_show)]  # debris only appears as globe orbits
     tier_idx = tuple({"red": 0, "yellow": 1, "green": 2}[l] for l in levels)
@@ -185,7 +185,6 @@ with tab_watch:
     st.dataframe(
         shown_table, width="stretch", hide_index=True,
         column_config={
-            "NORAD ID": st.column_config.NumberColumn(format="%d"),
             "Perigee (km)": st.column_config.NumberColumn(format="%.1f"),
             "Apogee (km)": st.column_config.NumberColumn(format="%.1f"),
             "Inclination (°)": st.column_config.NumberColumn(format="%.2f"),
