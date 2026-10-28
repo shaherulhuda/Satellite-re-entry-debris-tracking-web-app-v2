@@ -200,6 +200,7 @@ if not entered:
     )
     _l, _m, _r = st.columns([1, 1.6, 1])
     _m.button("Enter Watchlist  →", key="enter_btn", type="primary", on_click=_enter, width="stretch")
+    st.markdown('<div class="orbisk-cover"><p class="fine">Built on public CelesTrak element sets.</p></div>', unsafe_allow_html=True)
 
 # Loading screen: shown first (before the heavy imports and data load) on the first run of a session, replacing Streamlit's
 # grey placeholder bars. It removes itself when the data is ready, and fades away by itself after 25 s so an error can never stay hidden.
