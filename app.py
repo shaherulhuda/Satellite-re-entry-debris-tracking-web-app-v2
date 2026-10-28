@@ -672,7 +672,6 @@ def triage_view():
     if picks:
         st.session_state["tri_obj"] = picks["obj"]
     auto = bool(picks and picks.get("auto"))  # those buttons run the screening straight away
-    st.subheader("Screen close approaches")
     st.markdown("Pick a satellite, a time window and a distance; Orbisk lists the closest passes.")
     asset_ids = ids  # the 50 highest-risk active satellites, same as the watchlist
     with st.form("tri_asset_form"):

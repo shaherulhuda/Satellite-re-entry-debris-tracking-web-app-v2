@@ -273,6 +273,10 @@ def test_footer_download_button_and_no_repeated_heading():
     assert not at.exception
     assert any("orbisk-footer" in m.value and "github.com/shaherulhuda/Satellite-re-entry-debris-tracking-web-app-v2" in m.value for m in at.markdown)
     assert not [s for s in at.subheader if s.value == "Watchlist"]  # the section switcher already says Watchlist
+    tri = open_app(400)
+    tri.session_state["section"] = SEC_TRIAGE
+    tri.run()
+    assert not [s for s in tri.subheader if s.value == "Screen close approaches"]  # ... and so does this one
     for section in (SEC_TRACK, SEC_TRIAGE):
         other = open_app(400)
         other.session_state["section"] = section
