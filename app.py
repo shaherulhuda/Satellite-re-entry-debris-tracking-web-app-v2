@@ -477,7 +477,7 @@ st.markdown(
         background: radial-gradient(circle at 50% 0, #FF7A3D 0 2.6px, transparent 3.2px); }
     @keyframes orbisk-orbit { to { transform: rotate(360deg); } }
     [data-testid="stPopoverBody"] { width: min(520px, 92vw); max-height: calc(100vh - 8rem); overflow-y: auto; }
-    </style>""".replace("__ICON__", _data_uri("orbisk-mark.svg")),
+    </style>""".replace("__ICON__", _data_uri("orbisk-mark.png")),
     unsafe_allow_html=True,
 )
 with st.container(key="ai_fab"):
