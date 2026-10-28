@@ -51,19 +51,13 @@ st.caption(f"Data snapshot from {orbits.snapshot_date(df)} · {len(df):,} object
            + (f" (including {n_deb:,} debris fragments)" if n_deb else "")
            + (f" · all sets downloaded together {manifest['fetched_utc'][:16].replace('T', ' ')} UTC" if manifest else ""))
 health = snapshot.health(df)
-for issue in health["issues"]:
-    st.warning(f"{issue}. Run `python tools/refresh_data.py` to download every data set again at the same time.")
-if health["newest_age_days"] > 7:
-    st.warning(f"The newest element set is {health['newest_age_days']:.0f} days old, so positions shown for 'now' are extrapolated "
-               "and less accurate. Run `python tools/refresh_data.py` to download fresh data.")
 with st.expander("Data sets and snapshot consistency"):
     st.dataframe(pd.DataFrame({
         "Data set": health["table"]["set"], "Objects": health["table"]["objects"],
         "Newest element epoch": health["table"]["newest"].dt.strftime("%Y-%m-%d %H:%M"),
         "Median age vs newest (days)": health["table"]["median_age_days"].round(1)}), width="stretch", hide_index=True)
     st.caption("Position error grows with the age of an element set, so all sets should come from one download. "
-               "`python tools/refresh_data.py` fetches the active catalogue and every debris group at once; this table "
-               "flags any set that has drifted more than a few days from the rest.")
+               "`python tools/refresh_data.py` fetches the active catalogue and every debris group at once.")
 
 tab_watch, tab_track, tab_conj, tab_triage = st.tabs(["Watchlist", "Tracker", "Conjunctions", "Triage desk"])
 
@@ -377,11 +371,6 @@ with tab_triage:
         if res:
             arow = df[df["NORAD_CAT_ID"] == res["asset"]].iloc[0]
             ev = res["events"]
-            gap = abs((pd.Timestamp(res["start"]) - arow["EPOCH_DT"]).total_seconds()) / 86400.0
-            if gap > 3:
-                st.warning(f"This satellite's element set is {gap:.0f} days away from the window start, so its predicted position "
-                           "is extrapolated and the results below are unreliable. Refresh `active.json` (see "
-                           "`tools/refresh_data.py`) so every data set shares one snapshot.")
             m1, m2, m3 = st.columns(3)
             m1.metric("Debris in a similar altitude band", f"{res['n']:,}")
             m2.metric(f"Passes within {res['thr']} km", f"{len(ev)}")
@@ -488,8 +477,6 @@ with tab_triage:
                     st.session_state.pop("memo_eol", None)
         tres = st.session_state.get("tri_threat")
         if tres and tres["deb"] == int(dsel):
-            if abs((pd.Timestamp(tres["start"]) - drow["EPOCH_DT"]).total_seconds()) / 86400.0 > 3:
-                st.warning("This debris object's element set is several days from the window start; results are less reliable.")
             st.write(f"{tres['n']:,} satellites in a similar altitude band · **{len(tres['events'])}** passes within {tres['thr']} km "
                      f"in the {tres['hours']} h from {tres['start']} UTC")
             if len(tres["events"]):
