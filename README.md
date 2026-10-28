@@ -40,3 +40,13 @@ git add -A && git commit -m "Refresh data snapshot"
 The script writes `active.json`, one file per group in `data/debris/` and `data/snapshot.json`, and appends the perigee history.
 The app shows the data age and warns when a data set is out of step with the others or the newest element set is old.
 Any extra `.tle` / `.json` file dropped into `data/debris/` is loaded as another debris group.
+
+## Risk score and colour levels
+
+The Watchlist risk score blends seven terms (weights adjustable in the app): perigee, estimated decay time, inclination, object
+type, and three close-approach terms: **miss distance**, **relative speed** and **time to closest approach**. The close-approach
+terms use each object's closest pass to any satellite or debris in the 24 hours after the snapshot time. The listed objects are
+coloured by rank: the top 20% red, the middle 60% yellow, the bottom 20% green (10 / 30 / 10 for 50 objects).
+
+Screening every object would be too slow for the web app, so `tools/compute_conjunctions.py` precomputes the closest approach for
+the highest-risk objects (default 300) into `data/closest_approaches.json`. Re-run it after `tools/refresh_data.py`.

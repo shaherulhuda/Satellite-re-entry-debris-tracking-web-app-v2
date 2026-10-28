@@ -51,7 +51,7 @@ def test_risk_score_monotonic_and_weights():
     assert s.between(0, 100).all()
     top = df.loc[s.idxmax()]
     assert top["perigee_km"] < 300
-    only_type = decay.risk_score(comp, {"perigee": 0, "decay": 0, "inclination": 0, "type": 1})
+    only_type = decay.risk_score(comp, {"perigee": 0, "decay": 0, "inclination": 0, "type": 1, "miss": 0, "speed": 0, "time": 0})
     assert set(only_type.round(2)) <= {30.0, 80.0, 100.0}
 
 

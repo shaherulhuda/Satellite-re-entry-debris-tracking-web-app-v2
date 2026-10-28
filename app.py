@@ -9,7 +9,7 @@ from sgp4.api import jday
 
 import charts
 import conjunction
-import debris
+import dataset
 import decay
 import footprint
 import globe
@@ -23,14 +23,11 @@ st.set_page_config(page_title="Re-Entry & Debris Mitigation Assistant", layout="
 
 @st.cache_data
 def get_data():
-    """Active satellites + every debris group in data/debris, one record per NORAD id."""
-    active, deb = orbits.load_records(), debris.load_debris_records()
-    recs = debris.merge_records(active, deb)
-    cat = decay.estimate_decay(orbits.catalog_from_records(recs))
-    cat["type"] = cat["OBJECT_NAME"].map(decay.classify_type)
-    deb_ids = {r["NORAD_CAT_ID"] for r in deb}
-    cat["source"] = np.where(cat["NORAD_CAT_ID"].isin(deb_ids), "debris", "active")
-    return cat, {r["NORAD_CAT_ID"]: r for r in recs}
+    """Active satellites + every debris group, with the stored closest-approach results attached."""
+    cat, recs = dataset.load_catalogue()
+    ca = dataset.load_closest_approaches()
+    meta = {k: ca[k] for k in ("start_utc", "window_hours", "threshold_km", "top")} if ca else None
+    return dataset.attach_closest_approaches(cat, ca), recs, meta
 
 
 @st.cache_data
@@ -38,7 +35,7 @@ def get_history():
     return history.load_history()
 
 
-df, records = get_data()
+df, records, ca_meta = get_data()
 hist_all = get_history()
 components_df = decay.risk_components(df)
 
@@ -48,9 +45,9 @@ tab_watch, tab_track, tab_triage = st.tabs(["Watchlist", "Re-entry Tracker", "Co
 
 
 @st.cache_data(ttl=300)
-def watchlist_paths(norad_ids: tuple):
+def watchlist_paths(norad_ids: tuple, tiers: tuple = (), risks: tuple = ()):
     out = []
-    for nid in norad_ids:
+    for k, nid in enumerate(norad_ids):
         rec = records[nid]
         try:
             p = orbits.orbit_path_xyz(rec, n_points=120)
@@ -59,6 +56,9 @@ def watchlist_paths(norad_ids: tuple):
         row = df[df["NORAD_CAT_ID"] == nid].iloc[0]
         p["name"] = rec["OBJECT_NAME"]
         p["hover"] = f"{rec['OBJECT_NAME']}<br>perigee {row['perigee_km']:.0f} km · apogee {row['apogee_km']:.0f} km"
+        if tiers:
+            p["tier"] = int(tiers[k])
+            p["hover"] += f"<br>risk {risks[k]:.0f}"
         out.append(p)
     return out
 
@@ -134,20 +134,28 @@ with tab_watch:
 
     with st.expander("Risk score: formula and weights"):
         st.markdown(
-            "**risk = 100 × (w₁·perigee + w₂·decay + w₃·inclination + w₄·type) / Σw**, each term scaled 0–1:\n"
-            f"- **perigee** = (700 − perigee km) / 550, clipped (150 km → 1, ≥ 700 km → 0)\n"
-            f"- **decay** = how soon re-entry is estimated: 1 at ≤ 10 days, 0 at ≥ 10 years (log scale); 0 if no measurable decay\n"
+            "**risk = 100 × Σ(wᵢ·termᵢ) / Σw**, each term scaled 0–1:\n"
+            "- **perigee** = (700 − perigee km) / 550, clipped (150 km → 1, ≥ 700 km → 0)\n"
+            "- **decay** = how soon re-entry is estimated: 1 at ≤ 10 days, 0 at ≥ 10 years (log scale); 0 if no measurable decay\n"
             "- **inclination** = share of Earth's surface the orbit can overfly, sin(max latitude)\n"
             "- **type** = debris 1.0, rocket body 0.8, payload 0.3 (guessed from the catalogue name; "
-            "uncontrolled objects cannot be steered away)\n\n"
-            "Change the weights below; the ranking updates."
+            "uncontrolled objects cannot be steered away)\n"
+            "- **miss distance** = closest approach to any satellite or debris in the next 24 h: 1 at ≤ 1 km, 0 at ≥ 25 km (log scale)\n"
+            "- **relative speed** = closing speed at that approach ÷ 15 km/s (only counted when the miss is under 25 km)\n"
+            "- **time to closest approach** = 1 within 6 h, falling to 0 at 24 h (only counted when the miss is under 25 km)\n\n"
+            "Colour levels: of the objects listed, the top 20% by risk are 🔴 red, the next 60% 🟡 yellow and the last 20% 🟢 green "
+            "(10 / 30 / 10 for 50 objects). Change the weights below; the ranking updates."
         )
         w1, w2, w3, w4 = st.columns(4)
+        w5, w6, w7, _ = st.columns(4)
         weights = {
             "perigee": w1.slider("Perigee", 0.0, 1.0, decay.DEFAULT_WEIGHTS["perigee"], 0.05),
             "decay": w2.slider("Decay", 0.0, 1.0, decay.DEFAULT_WEIGHTS["decay"], 0.05),
             "inclination": w3.slider("Inclination", 0.0, 1.0, decay.DEFAULT_WEIGHTS["inclination"], 0.05),
             "type": w4.slider("Type", 0.0, 1.0, decay.DEFAULT_WEIGHTS["type"], 0.05),
+            "miss": w5.slider("Miss distance", 0.0, 1.0, decay.DEFAULT_WEIGHTS["miss"], 0.05),
+            "speed": w6.slider("Relative speed", 0.0, 1.0, decay.DEFAULT_WEIGHTS["speed"], 0.05),
+            "time": w7.slider("Time to approach", 0.0, 1.0, decay.DEFAULT_WEIGHTS["time"], 0.05),
         }
 
     ranked = df.copy()
@@ -160,17 +168,25 @@ with tab_watch:
         ranked = ranked.sort_values("perigee_km")
     top = ranked.head(int(n_show))
 
+    levels = decay.traffic_light(top["risk"])
+    LEVEL_LABEL = {"red": "🔴 High", "yellow": "🟡 Medium", "green": "🟢 Low"}
+    hours_txt = ["—" if pd.isna(h) else f"{h:.1f} h" for h in top["ca_hours"]]
     table = pd.DataFrame({
+        "Level": levels.map(LEVEL_LABEL),
         "Name": top["OBJECT_NAME"], "NORAD ID": top["NORAD_CAT_ID"], "Type": top["type"],
         "Perigee (km)": top["perigee_km"], "Apogee (km)": top["apogee_km"], "Inclination (°)": top["INCLINATION"],
         "Est. time to re-entry": top["decay_days"].map(decay.format_days),
         "Range (±×2)": [decay.format_range(lo, hi) for lo, hi in zip(top["decay_days_low"], top["decay_days_high"])],
+        "Closest approach (km)": top["ca_miss_km"], "Rel. speed (km/s)": top["ca_speed_km_s"],
+        "Time to closest approach": hours_txt, "With": top["ca_with"].fillna("—"),
         "Risk score": top["risk"],
     })
     table_ids = tuple(int(i) for i in table["NORAD ID"])
     shown = set(table_ids)
     deb_ids = tuple(int(i) for i in ranked.loc[ranked["source"] == "debris", "NORAD_CAT_ID"] if int(i) not in shown)[:int(n_deb_show)]
-    components.html(globe.orbit_html(watchlist_paths(table_ids), debris=debris_orbit_paths(deb_ids)), height=660)
+    tier_idx = tuple({"red": 0, "yellow": 1, "green": 2}[l] for l in levels)
+    components.html(globe.orbit_html(watchlist_paths(table_ids, tier_idx, tuple(float(r) for r in top["risk"])),
+                                     debris=debris_orbit_paths(deb_ids)), height=660)
     st.dataframe(
         table, width="stretch", hide_index=True,
         column_config={
@@ -178,9 +194,14 @@ with tab_watch:
             "Perigee (km)": st.column_config.NumberColumn(format="%.1f"),
             "Apogee (km)": st.column_config.NumberColumn(format="%.1f"),
             "Inclination (°)": st.column_config.NumberColumn(format="%.2f"),
+            "Closest approach (km)": st.column_config.NumberColumn(format="%.2f"),
+            "Rel. speed (km/s)": st.column_config.NumberColumn(format="%.2f"),
             "Risk score": st.column_config.ProgressColumn(format="%.0f", min_value=0, max_value=100),
         },
     )
+    if ca_meta is None or not top["ca_screened"].all():
+        st.caption("Close-approach columns are filled for the highest-risk objects only (`tools/compute_conjunctions.py`); "
+                   "— means not screened or no approach within the threshold.")
 
 # ---------------------------------------------------------------- Tracker
 with tab_track:
@@ -469,7 +490,9 @@ with st.expander("How these numbers are computed"):
         "- **Decay estimate:** the measured `MEAN_MOTION_DOT` (×2, since the field is ṅ/2) gives da/dt = −(2/3)·a·ṅ/n. "
         "That rate is scaled by air density (exponential atmosphere table) and integrated down to 120 km. "
         "Requires positive `BSTAR` (drag term). Uncertainty is at least a factor of 2.\n"
-        "- **Risk score:** weighted blend of perigee, decay time, inclination and object type; weights are adjustable above.\n"
+        "- **Risk score:** weighted blend of perigee, decay time, inclination, object type, and the closest approach to any satellite or debris "
+        "(miss distance, relative speed, time to it) over 24 h from the snapshot time; weights are adjustable on the Watchlist. "
+        "Close-approach results are precomputed for the highest-risk objects.\n"
         "- **Footprint:** latitude band ±min(i, 180−i); time per latitude from sin φ = sin i · sin u.\n"
         "- **Conjunctions:** coarse-grid SGP4 screening with 0.5 s refinement of local minima, against every satellite and debris fragment.\n"
         "- **Debris and triage:** the debris groups (TLE or CelesTrak JSON files in data/debris) are parsed into the same record format and screened with the same SGP4 conjunction code. "

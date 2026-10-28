@@ -17,6 +17,7 @@ from orbits import EARTH_RADIUS_KM as R
 
 DATA = Path(__file__).with_name("data")
 BG = "#05070d"
+TIER_COLORS = ("#e5484d", "#f5c518", "#30a46c")  # red, yellow, green
 
 
 @lru_cache(maxsize=1)
@@ -186,24 +187,29 @@ def _int_or_null(a):
 
 def orbit_html(paths: list[dict], height: int = 650, highlight: bool = False, spin: bool = True,
                debris: list[dict] | None = None) -> str:
-    """paths: dicts with name, x, y, z (one period, Earth-fixed-at-start km), period_s, optional hover.
+    """paths: dicts with name, x, y, z (one period, Earth-fixed-at-start km), period_s, optional hover and
+    optional `tier` (0 red, 1 yellow, 2 green; colours every orbit and dot when all paths have one).
 
     `debris` (same format, many objects) adds a toggleable layer of thin orbit lines and moving dots.
     Returns HTML for st.components.v1.html. The animation loops until paused.
     """
     fig = go.Figure(earth_traces())
-    X, Y, Z = [], [], []
+    X, Y, Z, line_tier = [], [], [], []
     for p in paths:
         X += _nan_to_null(p["x"]) + [None]
         Y += _nan_to_null(p["y"]) + [None]
         Z += _nan_to_null(p["z"]) + [None]
-    fig.add_trace(go.Scatter3d(
-        x=X, y=Y, z=Z, mode="lines", hoverinfo="skip", showlegend=False,
-        line=dict(width=5 if highlight else 2, color="#ff5a5f" if highlight else "rgba(255,179,71,0.6)")))
+        line_tier += [p.get("tier", 1)] * (len(p["x"]) + 1)
+    tiered = bool(paths) and all("tier" in p for p in paths)  # 0 red, 1 yellow, 2 green
+    scale = [[0, TIER_COLORS[0]], [0.5, TIER_COLORS[1]], [1, TIER_COLORS[2]]]
+    line_style = (dict(width=2, color=line_tier, colorscale=scale, cmin=0, cmax=2) if tiered else
+                  dict(width=5 if highlight else 2, color="#ff5a5f" if highlight else "rgba(255,179,71,0.6)"))
+    marker_style = (dict(size=4, color=[p["tier"] for p in paths], colorscale=scale, cmin=0, cmax=2) if tiered else
+                    dict(size=7 if highlight else 3.5, color="#ffd23f"))
+    fig.add_trace(go.Scatter3d(x=X, y=Y, z=Z, mode="lines", hoverinfo="skip", showlegend=False, line=line_style))
     fig.add_trace(go.Scatter3d(
         x=[0] * len(paths), y=[0] * len(paths), z=[0] * len(paths), mode="markers", showlegend=False,
-        marker=dict(size=7 if highlight else 3.5, color="#ffd23f"),
-        hovertext=[p.get("hover", p["name"]) for p in paths], hoverinfo="text"))
+        marker=marker_style, hovertext=[p.get("hover", p["name"]) for p in paths], hoverinfo="text"))
     line_idx, mark_idx = len(fig.data) - 2, len(fig.data) - 1
     deb_data = None
     if debris:

@@ -123,7 +123,14 @@ def altitude_projection(h0_km: float, rate_km_day: float, n: int = 200):
 
 
 # ------------------------------------------------------------------ risk score
-DEFAULT_WEIGHTS = {"perigee": 0.35, "decay": 0.35, "inclination": 0.20, "type": 0.10}
+DEFAULT_WEIGHTS = {"perigee": 0.20, "decay": 0.20, "inclination": 0.10, "type": 0.05,
+                   "miss": 0.25, "speed": 0.10, "time": 0.10}
+BASE_KEYS = ("perigee", "decay", "inclination", "type")  # the terms that need no conjunction screening
+COMPONENT_OF = {"perigee": "s_perigee", "decay": "s_decay", "inclination": "s_inclination", "type": "s_type",
+                "miss": "s_miss", "speed": "s_speed", "time": "s_time"}
+CA_MISS_FULL_KM, CA_MISS_ZERO_KM = 1.0, 25.0  # miss distance: full score at 1 km, none at 25 km or more (log scale)
+CA_SPEED_FULL_KM_S = 15.0                      # relative speed: linear up to a head-on LEO closing speed
+CA_TIME_FULL_H, CA_TIME_ZERO_H = 6.0, 24.0     # time to closest approach: full within 6 h, none at 24 h or more
 TYPE_SCORE = {"debris": 1.0, "rocket body": 0.8, "payload": 0.3}
 PERIGEE_HIGH_KM, PERIGEE_LOW_KM = 700.0, 150.0
 DECAY_FAST_DAYS, DECAY_SLOW_DAYS = 10.0, 3650.0
@@ -140,7 +147,8 @@ def classify_type(name: str) -> str:
 
 
 def risk_components(df: pd.DataFrame) -> pd.DataFrame:
-    """Four 0-1 sub-scores (1 = riskier). df must already have decay_days and perigee_km."""
+    """Seven 0-1 sub-scores (1 = riskier). df needs decay_days and perigee_km; the three close-approach
+    terms use ca_miss_km / ca_speed_km_s / ca_hours when present (NaN or absent = no approach, score 0)."""
     s_perigee = ((PERIGEE_HIGH_KM - df["perigee_km"]) / (PERIGEE_HIGH_KM - PERIGEE_LOW_KM)).clip(0, 1)
     d = df["decay_days"].to_numpy(float)
     with np.errstate(invalid="ignore"):
@@ -149,14 +157,34 @@ def risk_components(df: pd.DataFrame) -> pd.DataFrame:
     inc = df["INCLINATION"].to_numpy(float)
     s_incl = np.sin(np.radians(np.minimum(inc, 180 - inc)))  # share of Earth's area overflown
     s_type = df["OBJECT_NAME"].map(classify_type).map(TYPE_SCORE).to_numpy(float)
-    return pd.DataFrame({"s_perigee": s_perigee.to_numpy(float), "s_decay": s_decay,
-                         "s_inclination": s_incl, "s_type": s_type}, index=df.index)
+    n = len(df)
+    miss = df["ca_miss_km"].to_numpy(float) if "ca_miss_km" in df else np.full(n, np.nan)
+    speed = df["ca_speed_km_s"].to_numpy(float) if "ca_speed_km_s" in df else np.full(n, np.nan)
+    hours = df["ca_hours"].to_numpy(float) if "ca_hours" in df else np.full(n, np.nan)
+    relevant = np.isfinite(miss) & (miss < CA_MISS_ZERO_KM)  # speed and timing only matter for a close pass
+    with np.errstate(invalid="ignore", divide="ignore"):
+        s_miss = 1 - np.log10(np.maximum(miss, CA_MISS_FULL_KM) / CA_MISS_FULL_KM) / np.log10(CA_MISS_ZERO_KM / CA_MISS_FULL_KM)
+        s_speed = speed / CA_SPEED_FULL_KM_S
+        s_time = 1 - (hours - CA_TIME_FULL_H) / (CA_TIME_ZERO_H - CA_TIME_FULL_H)
+    s_miss, s_speed, s_time = (np.where(relevant & np.isfinite(v), np.clip(v, 0, 1), 0.0) for v in (s_miss, s_speed, s_time))
+    return pd.DataFrame({"s_perigee": s_perigee.to_numpy(float), "s_decay": s_decay, "s_inclination": s_incl,
+                         "s_type": s_type, "s_miss": s_miss, "s_speed": s_speed, "s_time": s_time}, index=df.index)
 
 
 def risk_score(components: pd.DataFrame, weights: dict | None = None) -> pd.Series:
-    """0-100 weighted average of the sub-scores."""
+    """0-100 weighted average of the sub-scores (weights for missing keys fall back to the defaults)."""
     w = {**DEFAULT_WEIGHTS, **(weights or {})}
     total = sum(w.values()) or 1.0
-    score = (w["perigee"] * components["s_perigee"] + w["decay"] * components["s_decay"]
-             + w["inclination"] * components["s_inclination"] + w["type"] * components["s_type"])
+    score = sum(w[k] * components[col] for k, col in COMPONENT_OF.items())
     return 100.0 * score / total
+
+
+def traffic_light(score: pd.Series, red_share: float = 0.2, green_share: float = 0.2) -> pd.Series:
+    """Level by rank within the given objects: top 20% 'red', bottom 20% 'green', the middle 'yellow'.
+
+    For 50 objects that is 10 red, 30 yellow, 10 green.
+    """
+    n = len(score)
+    n_red, n_green = int(round(n * red_share)), int(round(n * green_share))
+    rank = score.rank(method="first", ascending=False)
+    return pd.Series(np.where(rank <= n_red, "red", np.where(rank > n - n_green, "green", "yellow")), index=score.index)

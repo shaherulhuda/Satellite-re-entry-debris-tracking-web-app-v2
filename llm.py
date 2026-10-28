@@ -122,17 +122,27 @@ def object_facts(ctx: DataContext, norad_id: int, include_position: bool = True)
             "score_0_100": _num(row["risk"]), "rank": rank, "out_of": int(len(df)),
             "components_0_to_1": {
                 "perigee": _num(comp["s_perigee"], 2), "decay": _num(comp["s_decay"], 2),
-                "inclination": _num(comp["s_inclination"], 2), "type": _num(comp["s_type"], 2)},
+                "inclination": _num(comp["s_inclination"], 2), "type": _num(comp["s_type"], 2),
+                "miss_distance": _num(comp.get("s_miss", 0.0), 2), "relative_speed": _num(comp.get("s_speed", 0.0), 2),
+                "time_to_approach": _num(comp.get("s_time", 0.0), 2)},
             "weights": {k: _num(v, 2) for k, v in ctx.weights.items()},
             "how": "score = 100 * sum(weight*component) / sum(weights); perigee: 150 km->1, 700 km->0; "
                    "decay: <=10 days->1, >=10 years->0; inclination: share of Earth's surface overflown; "
-                   "type: debris 1.0, rocket body 0.8, payload 0.3",
+                   "type: debris 1.0, rocket body 0.8, payload 0.3; miss distance: closest approach in 24 h, 1 at <=1 km "
+                   "to 0 at >=25 km; relative speed: km/s over 15 (only if miss <25 km); time to approach: 1 within 6 h "
+                   "to 0 at 24 h (only if miss <25 km)",
         },
         "footprint": {
             "max_latitude_deg": _num(footprint.max_latitude(row["INCLINATION"])),
             "share_of_earth_surface": _num(footprint.surface_fraction(row["INCLINATION"]), 2),
         },
     }
+    if bool(row.get("ca_screened", False)):
+        miss = row.get("ca_miss_km")
+        facts["closest_approach_24h"] = (
+            {"with": row.get("ca_with"), "miss_km": _num(miss, 2), "relative_speed_km_s": _num(row.get("ca_speed_km_s"), 2),
+             "hours_from_snapshot": _num(row.get("ca_hours"), 1)} if miss is not None and np.isfinite(miss)
+            else "no approach inside the screening threshold")
     if ctx.history is not None:
         h = history_mod.object_history(ctx.history, int(norad_id))
         obs = history_mod.observed_decay_rate(h)
