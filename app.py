@@ -192,7 +192,7 @@ if not entered:
         'and screens them for close approaches with other satellites and space debris.</p></div>'
         '<div class="hero"><i class="orbit ring r3"></i><i class="orbit ring r2"></i><i class="orbit ring r1"></i><i class="orbit planet"></i></div></div>'
         '<div class="cards">'
-        '<div class="ccard"><b>🛰️ Watchlist</b><p>The 50 highest-risk satellites, ranked and colour-coded: 10 red, 30 yellow, 10 green. See their orbits in 3D and pick one to dig in.</p></div>'
+        '<div class="ccard"><b>🛰️ Watchlist</b><p>The 50 highest-risk satellites, ranked by risk. See their orbits in 3D and pick one to dig in.</p></div>'
         '<div class="ccard"><b>📉 Re-entry Tracker</b><p>Follow one satellite: where it is now, how fast it is decaying, and the latitudes it can come down over.</p></div>'
         '<div class="ccard"><b>⚠️ Conjunctions &amp; Triage</b><p>Screen one satellite against every other satellite and debris fragment for close passes in the next 1 to 30 days.</p></div>'
         '</div></div>',
