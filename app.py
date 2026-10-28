@@ -455,9 +455,10 @@ with tab_triage:
 st.markdown(
     """<style>
     .st-key-ai_fab { position: fixed; top: 3.75rem; right: 1.5rem; z-index: 1000; width: auto !important; }
-    .st-key-ai_fab button { width: 3.5rem; height: 3.5rem; padding: 0; border: 0; font-size: 0; background-color: transparent;
-        background: url(__ICON__) center / contain no-repeat; filter: drop-shadow(0 2px 6px rgba(0,0,0,.35)); }
-    .st-key-ai_fab button:hover, .st-key-ai_fab button:focus, .st-key-ai_fab button:active { background-color: transparent; border: 0; }
+    .st-key-ai_fab button { width: 3.5rem; height: 3.5rem; padding: 0; border: 0; border-radius: 50%; font-size: 0;
+        background: url(__ICON__) center / contain no-repeat; }
+    .st-key-ai_fab button:hover, .st-key-ai_fab button:focus, .st-key-ai_fab button:active {
+        background-color: transparent !important; border: 0 !important; box-shadow: none !important; }
     .st-key-ai_fab button > * { display: none; }
     .st-key-ai_fab { touch-action: none; cursor: grab; }
     /* tables are read-only: hide the cell pop-up box that would otherwise linger while a clicked row opens the tracker */
