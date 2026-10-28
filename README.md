@@ -20,12 +20,12 @@ same record format as `active.json`, so they flow through every feature (watchli
 The **Conjunctions & Triage** tab (it replaces the separate Conjunctions and Triage desk tabs) has two views:
 
 - **Screen an object for close approaches:** closest passes of any object against debris, active satellites or everything
-  (default 48 h), and for satellites a first-order avoidance-burn cost (delta-v from Clohessy-Wiltshire, propellant from the rocket equation, `maneuver.py`), and an optional AI decision memo.
+  (default 48 h).
 - **Follow a debris object:** its estimated descent through the crowded altitude bands (found from the data), which satellites
-  it passes close to, and the latitudes it can come down within, with an optional AI end-of-life briefing.
+  it passes close to, and the latitudes it can come down within.
 
-Screening uses mean elements and gives no collision probability; avoidance costs assume a small impulsive burn. These are
-triage estimates, not operational decisions.
+Screening uses mean elements and gives no collision probability. These are triage estimates, not operational decisions.
+Avoidance-cost maths (`maneuver.py`) and memo prompts (`llm.py`) are kept in the code for the AI assistant to use later.
 
 ## Keeping every data set at the same snapshot
 

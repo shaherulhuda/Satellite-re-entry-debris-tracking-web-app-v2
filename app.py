@@ -15,7 +15,6 @@ import footprint
 import globe
 import history
 import llm
-import maneuver
 import orbits
 import snapshot
 import triage
@@ -249,7 +248,6 @@ with tab_track:
                "predicted days ahead; this shows where it *can* pass, not where it *will* land.")
 
 # ---------------------------------------------------------------- Triage desk
-ctx = llm.DataContext(df, records, components_df, weights, hist_all)
 fmt_utc = lambda jd: conjunction.jd_to_datetime(jd).strftime("%Y-%m-%d %H:%M:%S")
 
 
@@ -272,31 +270,12 @@ EVENT_CONFIG = {
 }
 
 
-def memo_block(kind: str, facts: dict, task: str):
-    """Button + saved result for one LLM decision brief; the facts it is built from are always shown."""
-    ready, _, msg = ai_status()
-    if st.button("Write decision memo (AI)", key=f"memo_btn_{kind}", disabled=not ready):
-        with st.spinner("Asking the model…"):
-            res = ai_guarded(lambda c: llm.explain(c, st.session_state.get("ai_model", llm.DEFAULT_MODEL), facts, task))
-        if res:
-            st.session_state[f"memo_{kind}"] = res
-    if not ready:
-        st.caption(msg)
-    saved = st.session_state.get(f"memo_{kind}")
-    if saved:
-        st.markdown(saved[0])
-        st.caption(f"{saved[1]['input_tokens']} input / {saved[1]['output_tokens']} output tokens. "
-                   "The model only wrote prose around the numbers below; it did not compute them.")
-    with st.expander("Facts the memo is built from (computed by this app)"):
-        st.json(facts)
-
-
 with tab_triage:
     st.subheader("Conjunctions & triage")
     n_deb_t = int((df["source"] == "debris").sum())
     st.caption(f"Debris sets: {n_deb_t:,} fragments from {df['GROUP'].nunique()} breakup event(s) "
                f"({', '.join(sorted(df['GROUP'].dropna().unique()))}). "
-               "Screen any object against debris, satellites or everything; satellites also get an avoidance-cost estimate. "
+               "Screen any object against debris, satellites or everything. "
                "Screening and cost figures are first-order estimates from mean elements, for triage, not operational decisions.")
     mode = st.radio("View", ["Screen an object for close approaches", "Follow a debris object"], horizontal=True, key="tri_mode")
 
@@ -325,10 +304,8 @@ with tab_triage:
                 else:
                     st.session_state["tri_asset"] = {"asset": int(asset), "events": ev, "n": n, "hours": hours, "thr": thr,
                                                      "against": against, "start": ts0.strftime("%Y-%m-%d %H:%M")}
-                    st.session_state.pop("memo_asset", None)
         res = st.session_state.get("tri_asset")
         if res:
-            arow = df[df["NORAD_CAT_ID"] == res["asset"]].iloc[0]
             ev = res["events"]
             m1, m2, m3 = st.columns(3)
             against_name = triage.AGAINST[res["against"]]
@@ -341,52 +318,6 @@ with tab_triage:
                 st.success(f"No close approaches against {against_name.lower()} inside the threshold in this window.")
             else:
                 st.dataframe(events_table(ev), width="stretch", hide_index=True, column_config=EVENT_CONFIG)
-
-                st.markdown("#### Avoidance cost")
-                labels = [f"{r.name} · {r.miss_km:.1f} km at {fmt_utc(r.tca_jd)}" for r in ev.itertuples()]
-                pick = st.selectbox("Pass to plan around", range(len(ev)), format_func=lambda i: labels[i], key="tri_pass")
-                chosen = ev.iloc[int(pick)]
-                can_burn = arow["source"] == "active"
-                plan, preset, mass, isp, target = pd.DataFrame(), None, None, None, None
-                if can_burn:
-                    st.caption("Delta-v from a small tangential burn (Clohessy-Wiltshire) and fuel from the rocket equation. "
-                               "The existing miss direction is unknown, so a best case (burn moves it away) and a worst case are shown.")
-                    p1, p2, p3, p4 = st.columns(4)
-                    preset = p1.selectbox("Vehicle", list(maneuver.PRESETS), key="tri_preset")
-                    m0, isp0 = maneuver.PRESETS[preset]
-                    mass = p2.number_input("Mass (kg)", 1.0, 1_000_000.0, float(m0), key=f"tri_mass_{preset}")
-                    isp = p3.number_input("Isp (s)", 50.0, 5000.0, float(isp0), key=f"tri_isp_{preset}")
-                    target = p4.number_input("Target miss (km)", 1.0, 100.0, 5.0, key="tri_target")
-                    plan = maneuver.avoidance_plan(float(chosen["miss_km"]), target, float(arow["MEAN_MOTION"]), mass, isp)
-                else:
-                    st.caption("The screened object is debris and cannot manoeuvre, so there is no avoidance cost to estimate "
-                               "here. Screen the other object to see its cost.")
-                if not can_burn:
-                    pass
-                elif plan.empty:
-                    st.success(f"This pass already misses by {chosen['miss_km']:.1f} km, above the {target:.0f} km target: no burn needed.")
-                else:
-                    st.dataframe(pd.DataFrame({
-                        "Burn lead time (h)": plan["lead_h"], "Delta-v best (m/s)": plan["dv_best_ms"],
-                        "Delta-v worst (m/s)": plan["dv_worst_ms"], "Propellant worst (kg)": plan["fuel_worst_kg"],
-                        "% of vehicle mass (worst)": plan["fuel_worst_pct_mass"]}),
-                        width="stretch", hide_index=True, column_config={
-                            "Delta-v best (m/s)": st.column_config.NumberColumn(format="%.3f"),
-                            "Delta-v worst (m/s)": st.column_config.NumberColumn(format="%.3f"),
-                            "Propellant worst (kg)": st.column_config.NumberColumn(format="%.4f"),
-                            "% of vehicle mass (worst)": st.column_config.NumberColumn(format="%.4f")})
-                    st.caption("Burning earlier is far cheaper: the displacement grows with lead time. "
-                               "Electric thrusters burn for hours, so treat these as lower bounds for them.")
-
-                st.markdown("#### Decision memo")
-                chosen_info = {"object": chosen["name"], "norad_id": int(chosen["norad_id"]),
-                               "closest_approach_utc": fmt_utc(chosen["tca_jd"]), "miss_km": round(float(chosen["miss_km"]), 2),
-                               "relative_speed_km_s": round(float(chosen["rel_speed_km_s"]), 2)}
-                inputs = {"vehicle": preset, "mass_kg": mass, "isp_s": isp, "target_miss_km": target}
-                facts = triage.asset_facts(llm.object_facts(ctx, res["asset"], include_position=False), ev, res["n"],
-                                           res["hours"], res["thr"], res["start"], plan, inputs, chosen_info,
-                                           against=against_name.lower())
-                memo_block("asset", facts, llm.DECISION_MEMO_TASK)
 
     else:
         gsel = st.selectbox("Debris set", ["All"] + sorted(df.loc[df["source"] == "debris", "GROUP"].dropna().unique()), key="tri_group")
@@ -443,7 +374,6 @@ with tab_triage:
                 else:
                     st.session_state["tri_threat"] = {"deb": int(dsel), "events": thr_ev, "n": thr_n, "hours": dh,
                                                       "thr": dthr, "start": ts0.strftime("%Y-%m-%d %H:%M")}
-                    st.session_state.pop("memo_eol", None)
         tres = st.session_state.get("tri_threat")
         if tres and tres["deb"] == int(dsel):
             st.write(f"{tres['n']:,} satellites in a similar altitude band · **{len(tres['events'])}** passes within {tres['thr']} km "
@@ -454,16 +384,6 @@ with tab_triage:
         st.markdown("#### 3. Where it can come down")
         st.plotly_chart(charts.footprint_figure(float(drow["INCLINATION"])), width="stretch")
         st.caption("Shows the latitudes this orbit can reach, not a landing prediction.")
-
-        st.markdown("#### Decision memo")
-        threats = tres["events"] if tres and tres["deb"] == int(dsel) else pd.DataFrame(columns=triage.EVENT_COLUMNS)
-        facts = triage.eol_facts(llm.object_facts(ctx, int(dsel), include_position=False), crossings, threats,
-                                 tres["n"] if tres and tres["deb"] == int(dsel) else 0,
-                                 tres["hours"] if tres else 0, tres["thr"] if tres else 0,
-                                 tres["start"] if tres else "not screened", bands)
-        if not tres or tres["deb"] != int(dsel):
-            st.caption("Run the satellite screening above first so the memo can mention close passes.")
-        memo_block("eol", facts, llm.EOL_MEMO_TASK)
 
 # floating chat launcher (top-right, below Streamlit's toolbar); the popover opens downward and closes with the same button
 st.markdown(
@@ -566,7 +486,6 @@ with st.expander("How these numbers are computed"):
         "- **Footprint:** latitude band ±min(i, 180−i); time per latitude from sin φ = sin i · sin u.\n"
         "- **Conjunctions:** coarse-grid SGP4 screening with 0.5 s refinement of local minima, against debris, satellites or both.\n"
         "- **Debris and triage:** the debris groups (TLE or CelesTrak JSON files in data/debris) are parsed into the same record format and screened with the same SGP4 conjunction code. "
-        "Avoidance cost: tangential burn displacement from Clohessy-Wiltshire (best/worst case for the unknown miss direction), propellant from the rocket equation. "
         "Altitude bands are the densest ranges of the active catalogue, found from the data.\n"
         "- **Assistant (optional):** off unless an API key is supplied. The model only receives numbers computed above, or calls the app's own lookup functions; it never computes orbits.\n"
         "- **Limits:** one element set per object (no history until snapshots are added), mean elements are only km-accurate, "
