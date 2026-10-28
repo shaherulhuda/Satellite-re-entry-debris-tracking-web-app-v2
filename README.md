@@ -19,7 +19,7 @@ same record format as `active.json`, so they flow through every feature (watchli
 
 The **Conjunctions & Triage** tab (it replaces the separate Conjunctions and Triage desk tabs) has two views:
 
-- **Screen an object for close approaches:** closest passes of any object against debris, active satellites or everything
+- **Screen an object for close approaches:** closest passes of any object against every satellite and debris fragment
   (default 48 h).
 - **Follow a debris object:** its estimated descent through the crowded altitude bands (found from the data), which satellites
   it passes close to, and the latitudes it can come down within.

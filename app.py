@@ -270,17 +270,13 @@ with tab_triage:
     n_deb_t = int((df["source"] == "debris").sum())
     st.caption(f"Debris sets: {n_deb_t:,} fragments from {df['GROUP'].nunique()} breakup event(s) "
                f"({', '.join(sorted(df['GROUP'].dropna().unique()))}). "
-               "Screen any object against debris, satellites or everything. "
+               "Screen any object against every satellite and debris fragment. "
                "Screening and cost figures are first-order estimates from mean elements, for triage, not operational decisions.")
     mode = st.radio("View", ["Screen an object for close approaches", "Follow a debris object"], horizontal=True, key="tri_mode")
 
     if mode.startswith("Screen"):
         asset_ids = df.sort_values("OBJECT_NAME")["NORAD_CAT_ID"].astype(int).tolist()
-        deb_groups = sorted(df.loc[df["source"] == "debris", "GROUP"].dropna().unique())
         with st.form("tri_asset_form"):
-            f1, f2 = st.columns([1, 2])
-            against = f1.selectbox("Screen against", list(triage.AGAINST), format_func=triage.AGAINST.get)
-            use_groups = f2.multiselect("Debris sets included", deb_groups, default=deb_groups)
             a1, a2, a3, a4 = st.columns([3, 1, 1, 2])
             asset = a1.selectbox("Object to screen", asset_ids,
                                  index=asset_ids.index(25544) if 25544 in asset_ids else 0, format_func=label)
@@ -293,24 +289,23 @@ with tab_triage:
             with st.spinner("Propagating candidates…"):
                 try:
                     ev, n = triage.screen_asset(records[int(asset)], df, records, jd0, hours=hours, threshold_km=thr,
-                                                against=against, groups=use_groups)
+                                                against="all")
                 except Exception as exc:
                     st.error(f"Screening failed: {exc}")
                 else:
                     st.session_state["tri_asset"] = {"asset": int(asset), "events": ev, "n": n, "hours": hours, "thr": thr,
-                                                     "against": against, "start": ts0.strftime("%Y-%m-%d %H:%M")}
+                                                     "start": ts0.strftime("%Y-%m-%d %H:%M")}
         res = st.session_state.get("tri_asset")
         if res:
             ev = res["events"]
             m1, m2, m3 = st.columns(3)
-            against_name = triage.AGAINST[res["against"]]
             m1.metric("Objects in a similar altitude band", f"{res['n']:,}")
             m2.metric(f"Passes within {res['thr']} km", f"{len(ev)}")
             m3.metric("Closest pass", f"{ev['miss_km'].min():.1f} km" if len(ev) else "none")
             st.caption(f"{records[res['asset']]['OBJECT_NAME']} · window from {res['start']} UTC for {res['hours']} h. "
                        "Objects holding within ~20 km of each other the whole window (docked/formation) are ignored.")
             if not len(ev):
-                st.success(f"No close approaches against {against_name.lower()} inside the threshold in this window.")
+                st.success("No close approaches against any catalogue object inside the threshold in this window.")
             else:
                 st.dataframe(events_table(ev), width="stretch", hide_index=True, column_config=EVENT_CONFIG)
 
@@ -479,7 +474,7 @@ with st.expander("How these numbers are computed"):
         "Requires positive `BSTAR` (drag term). Uncertainty is at least a factor of 2.\n"
         "- **Risk score:** weighted blend of perigee, decay time, inclination and object type; weights are adjustable above.\n"
         "- **Footprint:** latitude band ±min(i, 180−i); time per latitude from sin φ = sin i · sin u.\n"
-        "- **Conjunctions:** coarse-grid SGP4 screening with 0.5 s refinement of local minima, against debris, satellites or both.\n"
+        "- **Conjunctions:** coarse-grid SGP4 screening with 0.5 s refinement of local minima, against every satellite and debris fragment.\n"
         "- **Debris and triage:** the debris groups (TLE or CelesTrak JSON files in data/debris) are parsed into the same record format and screened with the same SGP4 conjunction code. "
         "Altitude bands are the densest ranges of the active catalogue, found from the data.\n"
         "- **Assistant (optional):** off unless an API key is supplied. The model only receives numbers computed above, or calls the app's own lookup functions; it never computes orbits.\n"
