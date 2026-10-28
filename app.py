@@ -26,7 +26,8 @@ ASSETS = Path(__file__).parent / "assets"
 
 
 def _data_uri(name: str) -> str:
-    return "data:image/png;base64," + base64.b64encode((ASSETS / name).read_bytes()).decode()
+    mime = "image/svg+xml" if name.endswith(".svg") else "image/png"
+    return f"data:{mime};base64," + base64.b64encode((ASSETS / name).read_bytes()).decode()
 
 
 st.set_page_config(page_title="Orbisk: Re-Entry & Debris Mitigation", page_icon=str(ASSETS / "orbisk-icon.png"), layout="wide")
@@ -454,8 +455,9 @@ with tab_triage:
 st.markdown(
     """<style>
     .st-key-ai_fab { position: fixed; top: 3.75rem; right: 1.5rem; z-index: 1000; width: auto !important; }
-    .st-key-ai_fab button { width: 3.5rem; height: 3.5rem; padding: 0; border-radius: 16px; border: 0; font-size: 0;
-        background: url(__ICON__) center / cover no-repeat; box-shadow: 0 2px 10px rgba(0,0,0,.35); }
+    .st-key-ai_fab button { width: 3.5rem; height: 3.5rem; padding: 0; border: 0; font-size: 0; background-color: transparent;
+        background: url(__ICON__) center / contain no-repeat; filter: drop-shadow(0 2px 6px rgba(0,0,0,.35)); }
+    .st-key-ai_fab button:hover, .st-key-ai_fab button:focus, .st-key-ai_fab button:active { background-color: transparent; border: 0; }
     .st-key-ai_fab button > * { display: none; }
     .st-key-ai_fab { touch-action: none; cursor: grab; }
     /* tables are read-only: hide the cell pop-up box that would otherwise linger while a clicked row opens the tracker */
@@ -475,7 +477,7 @@ st.markdown(
         background: radial-gradient(circle at 50% 0, #FF7A3D 0 2.6px, transparent 3.2px); }
     @keyframes orbisk-orbit { to { transform: rotate(360deg); } }
     [data-testid="stPopoverBody"] { width: min(520px, 92vw); max-height: calc(100vh - 8rem); overflow-y: auto; }
-    </style>""".replace("__ICON__", _data_uri("orbisk-icon.png")),
+    </style>""".replace("__ICON__", _data_uri("orbisk-mark.svg")),
     unsafe_allow_html=True,
 )
 with st.container(key="ai_fab"):
