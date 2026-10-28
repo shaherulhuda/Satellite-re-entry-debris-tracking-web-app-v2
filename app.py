@@ -1,6 +1,8 @@
 """Re-Entry & Debris Mitigation Assistant (Streamlit UI). Physics lives in the other modules."""
+import base64
 import os
 import urllib.parse
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -19,7 +21,14 @@ import llm
 import orbits
 import triage
 
-st.set_page_config(page_title="Re-Entry & Debris Mitigation Assistant", layout="wide")
+ASSETS = Path(__file__).parent / "assets"
+
+
+def _data_uri(name: str) -> str:
+    return "data:image/png;base64," + base64.b64encode((ASSETS / name).read_bytes()).decode()
+
+
+st.set_page_config(page_title="Orbisk: Re-Entry & Debris Mitigation", page_icon=str(ASSETS / "orbisk-icon.png"), layout="wide")
 
 WATCHLIST_SIZE = 50  # the watchlist always shows the 50 highest-risk active satellites
 
@@ -42,7 +51,22 @@ df, records, ca_meta = get_data()
 hist_all = get_history()
 components_df = decay.risk_components(df)
 
-st.title("Re-Entry & Debris Mitigation Assistant")
+st.markdown(
+    f"""<style>
+    .orbisk-logo {{ text-align: center; margin: -1rem 0 .5rem; }}
+    .orbisk-logo img {{ height: 64px; width: auto; }}
+    .orbisk-logo .for-light {{ display: none; }}
+    @media (prefers-color-scheme: light) {{
+        :root:not([data-theme="dark"]) .orbisk-logo .for-dark {{ display: none; }}
+        :root:not([data-theme="dark"]) .orbisk-logo .for-light {{ display: inline; }}
+    }}
+    </style>
+    <div class="orbisk-logo" role="img" aria-label="Orbisk: Re-Entry & Debris Mitigation">
+      <img class="for-dark" alt="Orbisk" src="{_data_uri('orbisk-logo-for-dark.png')}">
+      <img class="for-light" alt="Orbisk" src="{_data_uri('orbisk-logo-for-light.png')}">
+    </div>""",
+    unsafe_allow_html=True,
+)
 
 tab_watch, tab_track, tab_triage = st.tabs(["Watchlist", "Re-entry Tracker", "Conjunctions & Triage"])
 
@@ -316,13 +340,15 @@ with tab_triage:
 st.markdown(
     """<style>
     .st-key-ai_fab { position: fixed; top: 3.75rem; right: 1.5rem; z-index: 1000; width: auto !important; }
-    .st-key-ai_fab button { border-radius: 999px; box-shadow: 0 2px 10px rgba(0,0,0,.35); font-weight: 600; }
+    .st-key-ai_fab button { width: 3.5rem; height: 3.5rem; padding: 0; border-radius: 16px; border: 0; font-size: 0;
+        background: url(__ICON__) center / cover no-repeat; box-shadow: 0 2px 10px rgba(0,0,0,.35); }
+    .st-key-ai_fab button > * { display: none; }
     [data-testid="stPopoverBody"] { width: min(520px, 92vw); max-height: calc(100vh - 8rem); overflow-y: auto; }
-    </style>""",
+    </style>""".replace("__ICON__", _data_uri("orbisk-icon.png")),
     unsafe_allow_html=True,
 )
 with st.container(key="ai_fab"):
-    with st.popover("💬 Ask the assistant"):
+    with st.popover("Ask the Orbisk assistant", help="Ask the Orbisk assistant"):
         st.caption("Optional. The app is fully offline without this. When you add an Anthropic API key the assistant can "
                    "explain results in plain language. It never calculates orbits: it only sees numbers this app computed, "
                    "or looks data up through the app's own functions.")
