@@ -278,11 +278,6 @@ EVENT_CONFIG = {
 
 with tab_triage:
     st.subheader("Conjunctions & triage")
-    n_deb_t = int((df["source"] == "debris").sum())
-    st.caption(f"Debris sets: {n_deb_t:,} fragments from {df['GROUP'].nunique()} breakup event(s) "
-               f"({', '.join(sorted(df['GROUP'].dropna().unique()))}). "
-               "Screen any object against every satellite and debris fragment. "
-               "Screening and cost figures are first-order estimates from mean elements, for triage, not operational decisions.")
     mode = st.radio("View", ["Screen an object for close approaches", "Follow a debris object"], horizontal=True, key="tri_mode")
 
     if mode.startswith("Screen"):
