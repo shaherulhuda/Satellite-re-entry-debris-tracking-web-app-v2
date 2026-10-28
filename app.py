@@ -475,11 +475,11 @@ def watchlist_view():
     def risk_bar(score: float, level: str) -> str:
         """Progress-bar image (data URI): track + fill in the level colour + the score. The leading comment holds the
         zero-padded score so sorting the column orders rows by score."""
-        fill = 150 * score / 100
-        svg = (f'<!--{round(score * 10):04d}--><svg xmlns="http://www.w3.org/2000/svg" width="210" height="28" viewBox="0 0 210 28">'
-               f'<rect x="0" y="11" width="150" height="6" rx="3" fill="#808080" fill-opacity="0.28"/>'
-               f'<rect x="0" y="11" width="{fill:.1f}" height="6" rx="3" fill="{bar_hex[level]}"/>'
-               f'<text x="162" y="18" font-family="Source Sans Pro, Arial, sans-serif" font-size="12" font-weight="600" '
+        fill = 84 * score / 100  # 10 px of space on the left keeps the bar clear of the column border, and the score stays in view
+        svg = (f'<!--{round(score * 10):04d}--><svg xmlns="http://www.w3.org/2000/svg" width="130" height="28" viewBox="0 0 130 28">'
+               f'<rect x="10" y="11" width="84" height="6" rx="3" fill="#808080" fill-opacity="0.28"/>'
+               f'<rect x="10" y="11" width="{fill:.1f}" height="6" rx="3" fill="{bar_hex[level]}"/>'
+               f'<text x="101" y="18" font-family="Source Sans Pro, Arial, sans-serif" font-size="12" font-weight="600" '
                f'fill="{bar_hex[level]}">{score:.0f}</text></svg>')
         return "data:image/svg+xml;utf8," + urllib.parse.quote(svg, safe="")
 
