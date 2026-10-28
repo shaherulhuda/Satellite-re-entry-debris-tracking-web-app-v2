@@ -200,7 +200,7 @@ with tab_watch:
 
 # ---------------------------------------------------------------- Tracker
 with tab_track:
-    ids = df.sort_values("OBJECT_NAME")["NORAD_CAT_ID"].astype(int).tolist()
+    ids = df[df["source"] == "active"].sort_values("OBJECT_NAME")["NORAD_CAT_ID"].astype(int).tolist()  # active satellites only
     default = ids.index(25544) if 25544 in ids else 0
     norad = st.selectbox("Object", ids, index=default, format_func=label)
     row = df[df["NORAD_CAT_ID"] == norad].iloc[0]
@@ -285,7 +285,7 @@ with tab_triage:
     mode = st.radio("View", ["Screen an object for close approaches", "Follow a debris object"], horizontal=True, key="tri_mode")
 
     if mode.startswith("Screen"):
-        asset_ids = df.sort_values("OBJECT_NAME")["NORAD_CAT_ID"].astype(int).tolist()
+        asset_ids = ids  # active satellites only (from active.json)
         with st.form("tri_asset_form"):
             a1, a2, a3 = st.columns([3, 1, 1])
             asset = a1.selectbox("Object to screen", asset_ids,
