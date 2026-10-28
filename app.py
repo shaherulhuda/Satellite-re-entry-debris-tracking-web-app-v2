@@ -88,7 +88,8 @@ st.session_state["_booted"] = True
 _CSS = """<style>
 /* ---- space look: starfield page, glass panels, pill tabs, matching scrollbars, tooltips and motion ---- */
 .stApp { background: #070b1a url(__BG__) center / cover fixed no-repeat; }
-header.stAppHeader { background: transparent !important; }
+header.stAppHeader, header.stAppHeader * { background: transparent !important; pointer-events: none !important; }  /* the invisible bar must not block clicks under it (the assistant button) */
+[data-testid="stStatusWidget"], [data-testid="stStatusWidget"] * { pointer-events: auto !important; }
 [data-testid="stAppDeployButton"], [data-testid="stMainMenu"], [data-testid="stToolbarActions"], [data-testid="stDecoration"],
 footer, [data-testid="stFooter"] { display: none !important; }
 [data-testid="stMainBlockContainer"] { padding-top: 2.2rem; }
@@ -144,7 +145,7 @@ iframe { border-radius: 14px; }
 @media (max-width: 640px) { .orbisk-header .tagline { display: none; } }
 
 /* floating assistant button: planet icon with a white label under it; hidden label while the popup is open */
-.st-key-ai_fab { position: fixed; top: 1rem; right: 1.5rem; z-index: 1000; width: auto !important; touch-action: none; cursor: grab; }
+.st-key-ai_fab { position: fixed; top: 1rem; right: 1.5rem; z-index: 1000001; width: auto !important; touch-action: none; cursor: grab; }
 .st-key-ai_fab button { width: 3.5rem; height: 3.5rem; padding: 0; border: 0; border-radius: 50%; font-size: 0;
     background: url(__ICON__) center / contain no-repeat; }
 .st-key-ai_fab button:hover, .st-key-ai_fab button:focus, .st-key-ai_fab button:active {
