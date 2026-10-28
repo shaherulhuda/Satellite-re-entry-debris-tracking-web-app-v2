@@ -1,5 +1,9 @@
 # Orbisk theme: dark space look. The page background is a starfield drawn by the CSS in app.py; cyan is the primary
 # colour (from the logo's orbit ring) so buttons never share a colour with the red / yellow / green risk levels.
+[server]
+# serves static/plotly.min.js, shared by every globe so each one is a fraction of the size
+enableStaticServing = true
+
 [theme]
 base = "dark"
 primaryColor = "#2BB5C8"

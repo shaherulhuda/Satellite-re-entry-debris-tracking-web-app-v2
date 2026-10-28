@@ -1,4 +1,4 @@
-"""3D Earth + orbits, rendered as a self-contained HTML page (plotly.js inlined, no network).
+"""3D Earth + orbits, rendered as an HTML page (plotly.js is loaded from one shared, browser-cached static file).
 
 The Earth (continents from bundled Natural Earth data) is drawn in the Earth-fixed frame.
 A small JavaScript loop moves each object along its orbit and rotates the inertial orbit
@@ -12,10 +12,13 @@ from pathlib import Path
 
 import numpy as np
 import plotly.graph_objects as go
+import plotly.offline as plotly_offline
 
 from orbits import EARTH_RADIUS_KM as R
 
 DATA = Path(__file__).with_name("data")
+PLOTLY_SRC = "/app/static/plotly.min.js"  # static/plotly.min.js, served because .streamlit/config.toml enables static serving
+PLOTLY_CDN = f"https://cdn.plot.ly/plotly-{plotly_offline.get_plotlyjs_version()}.min.js"
 BG = "rgba(0,0,0,0)"  # transparent: the page's starfield shows behind the globe
 TIER_COLORS = ("#e5484d", "#f5c518", "#30a46c", "#4fd1e0")  # red, yellow, green, cyan (the screened object)
 
@@ -38,9 +41,10 @@ def earth_traces() -> list:
     lat = np.linspace(-90, 90, nlat)
     lon = np.linspace(-180, 180, nlon)
     LON, LAT = np.meshgrid(lon, lat)
-    x, y, z = (np.round(a, 1) for a in lonlat_to_xyz(LON, LAT))
+    # int16 km and uint8 shading: Plotly sends these as compact binary, a third of the size of float lists
+    x, y, z = (np.round(a).astype(np.int16) for a in lonlat_to_xyz(LON, LAT))
     surface = go.Surface(
-        x=x, y=y, z=z, surfacecolor=np.round(mask, 2), cmin=0, cmax=1, showscale=False,
+        x=x, y=y, z=z, surfacecolor=np.round(mask * 100).astype(np.uint8), cmin=0, cmax=100, showscale=False,
         hoverinfo="skip", colorscale=[[0, "#0a3a6b"], [0.35, "#1b5e9b"], [0.5, "#2f7a3e"], [1, "#6f9a4a"]],
         lighting=dict(ambient=0.75, diffuse=0.55, specular=0.1, roughness=0.9),
     )
@@ -48,9 +52,9 @@ def earth_traces() -> list:
     for ring in coast:
         a = np.array(ring)
         px, py, pz = lonlat_to_xyz(a[:, 0], a[:, 1], R * 1.003)
-        cx += list(np.round(px, 1)) + [None]
-        cy += list(np.round(py, 1)) + [None]
-        cz += list(np.round(pz, 1)) + [None]
+        cx += [int(v) for v in np.round(px)] + [None]
+        cy += [int(v) for v in np.round(py)] + [None]
+        cz += [int(v) for v in np.round(pz)] + [None]
     coastlines = go.Scatter3d(x=cx, y=cy, z=cz, mode="lines", hoverinfo="skip", showlegend=False,
                               line=dict(color="rgba(235,245,255,0.8)", width=1))
     return [surface, coastlines]
@@ -93,7 +97,7 @@ def ground_track_figure(track, pos, height: int = 460) -> go.Figure:
 
 
 def _nan_to_null(a):
-    return [None if not np.isfinite(v) else round(float(v), 1) for v in a]
+    return [None if not np.isfinite(v) else int(round(float(v))) for v in a]  # whole km: far below one screen pixel
 
 
 _JS = """
@@ -106,6 +110,13 @@ _JS = """
   const DEB = D.deb || null;             // optional debris layer (lines + moving dots), can be switched off
   let showDeb = !!DEB, forceDebLines = true, lastDebLines = -1e9;
   if (DEB) { const tr = gd.data[DEB.lineIdx]; DEB.X = tr.x; DEB.Y = tr.y; DEB.Z = tr.z; }
+  // the orbit lines and per-object tracks are read back from the plotted trace (the data is only sent once)
+  { const tr = gd.data[LINE]; D.X = tr.x; D.Y = tr.y; D.Z = tr.z; D.sats = [];
+    let cx = [], cy = [], cz = [], k = 0;
+    for (let i = 0; i < D.X.length; i++) {
+      if (D.X[i] === null) { D.sats.push({x: cx, y: cy, z: cz, T: D.T[k++]}); cx = []; cy = []; cz = []; }
+      else { cx.push(D.X[i]); cy.push(D.Y[i]); cz.push(D.Z[i]); }
+    } }
   let s = 0, playing = D.autoplay !== false, speed = 60, spin = D.spin, last = null, phi = Math.atan2(D.eye[1], D.eye[0]);
   const rad = Math.hypot(D.eye[0], D.eye[1]), ez = D.eye[2];
 
@@ -280,14 +291,15 @@ def orbit_html(paths: list[dict], height: int = 650, highlight: bool = False, sp
         scene=dict(xaxis=ax, yaxis=ax, zaxis=ax, aspectmode="data", bgcolor=BG,
                    camera=dict(eye=dict(x=eye[0], y=eye[1], z=eye[2]))))
     data = {
-        "X": X, "Y": Y, "Z": Z, "eye": eye, "spin": spin,
-        "lineIdx": line_idx, "markIdx": mark_idx, "deb": deb_data, "ev": ev_data, "autoplay": autoplay,
-        "sats": [{"x": _nan_to_null(p["x"]), "y": _nan_to_null(p["y"]), "z": _nan_to_null(p["z"]),
-                  "T": p["period_s"]} for p in paths],
+        "eye": eye, "spin": spin, "lineIdx": line_idx, "markIdx": mark_idx, "deb": deb_data, "ev": ev_data,
+        "autoplay": autoplay, "T": [round(float(p["period_s"]), 1) for p in paths],
     }
     js = _JS.replace("__DATA__", json.dumps(data, separators=(",", ":")))
-    out = fig.to_html(full_html=True, include_plotlyjs=True, div_id="globe", post_script=js,
+    out = fig.to_html(full_html=True, include_plotlyjs=False, div_id="globe", post_script=js,
                       config={"displaylogo": False, "scrollZoom": True},
                       default_height=f"{height}px")
+    # Plotly is not inlined (4.8 MB per globe): every globe loads one shared copy that the browser caches. It is served by
+    # Streamlit's static folder; if that is unavailable the same version is fetched from the Plotly CDN instead.
+    loader = (f'<script src="{PLOTLY_SRC}" onerror="document.write(\'<script src=&quot;{PLOTLY_CDN}&quot;><\\/script>\')"></script>')
     # transparent iframe (no colour-scheme meta: a scheme that differs from the page's makes the browser paint an opaque backdrop)
-    return out.replace("<head>", "<head><style>html,body{background:transparent!important}</style>", 1)
+    return out.replace("<head>", "<head><style>html,body{background:transparent!important}</style>" + loader, 1)

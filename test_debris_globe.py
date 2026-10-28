@@ -84,3 +84,16 @@ def test_globe_zoom_needs_a_click():
     html = globe.orbit_html([path])
     assert "stopImmediatePropagation" in html and "Click the globe, then scroll to zoom" in html
     assert "mouseleave" in html
+
+
+def test_plotly_is_shared_not_inlined():
+    from pathlib import Path
+    import numpy as np
+    import plotly
+    import globe
+    path = {"x": np.array([7000.0, 0, -7000, 0]), "y": np.array([0, 7000.0, 0, -7000]), "z": np.zeros(4), "period_s": 5400.0, "name": "A"}
+    html = globe.orbit_html([path])
+    assert len(html) < 1_000_000 and f'src="{globe.PLOTLY_SRC}"' in html and globe.PLOTLY_CDN in html  # static copy + CDN fallback
+    packaged = Path(plotly.__file__).parent / "package_data" / "plotly.min.js"
+    assert (Path(__file__).parent / "static" / "plotly.min.js").read_bytes() == packaged.read_bytes()  # static copy matches the pinned plotly
+    assert "enableStaticServing = true" in (Path(__file__).parent / ".streamlit" / "config.toml").read_text()
