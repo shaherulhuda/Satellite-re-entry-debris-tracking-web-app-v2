@@ -202,8 +202,9 @@ with tab_watch:
 
 # ---------------------------------------------------------------- Tracker
 with tab_track:
-    ids = df[df["source"] == "active"].sort_values("OBJECT_NAME")["NORAD_CAT_ID"].astype(int).tolist()  # active satellites only
-    default = ids.index(25544) if 25544 in ids else 0
+    # the same 50 highest-risk active satellites as the watchlist pool, highest risk first
+    ids = sats.sort_values("risk", ascending=False).head(WATCHLIST_SIZE)["NORAD_CAT_ID"].astype(int).tolist()
+    default = 0
     norad = st.selectbox("Object", ids, index=default, format_func=label)
     row = df[df["NORAD_CAT_ID"] == norad].iloc[0]
     record = records[int(norad)]
@@ -284,11 +285,11 @@ EVENT_CONFIG = {
 
 with tab_triage:
     st.subheader("Conjunctions & triage")
-    asset_ids = ids  # active satellites only (from active.json)
+    asset_ids = ids  # the 50 highest-risk active satellites, same as the watchlist
     with st.form("tri_asset_form"):
         a1, a2, a3 = st.columns([3, 1, 1])
         asset = a1.selectbox("Object to screen", asset_ids,
-                             index=asset_ids.index(25544) if 25544 in asset_ids else 0, format_func=label)
+                             index=0, format_func=label)
         days = a2.slider("Window (days)", 1, 30, 2)
         hours = days * 24
         thr = a3.slider("Report within (km)", 1, 100, 25)

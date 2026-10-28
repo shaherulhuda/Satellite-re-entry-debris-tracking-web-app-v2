@@ -50,10 +50,14 @@ def test_app_lists_and_pickers_are_satellites_only():
     assert not table["Name"].str.contains("DEB").any() and not set(table["Name"]) & deb_names
     # the table fits on screen: no NORAD ID, Type or With columns, and the risk bar is present
     assert not {"NORAD ID", "Type", "With"} & set(table.columns) and "Risk score" in table.columns
+    # pool = the 50 highest-risk active satellites (also what the watchlist draws on)
+    full = dataset.attach_closest_approaches(cat, dataset.load_closest_approaches())
+    full["risk"] = decay.risk_score(decay.risk_components(full))
+    pool = full[full.source == "active"].sort_values("risk", ascending=False).head(50).NORAD_CAT_ID.astype(int).tolist()
     for box in at.selectbox:
         if box.label in ("Object", "Object to screen"):
             ids = [int(re.search(r"\((\d+)\)$", o).group(1)) for o in box.options]
-            assert ids and not set(ids) & deb
+            assert ids == pool and not set(ids) & deb  # same 50 satellites, highest risk first
     assert not any("Follow a debris object" in str(r.options) for r in at.radio)  # debris is never the subject
     # debris only enters through the globe box and the screening partners
     assert [n.label for n in at.number_input if n.label == "Debris"] == ["Debris"]

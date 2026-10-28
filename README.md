@@ -14,7 +14,7 @@ access code and `ASSISTANT_MAX_REQUESTS` (default 30) to cap requests per sessio
 
 ## Debris data and scope
 
-The Watchlist, Re-entry Tracker and Conjunctions & Triage tabs show and screen **active satellites from `active.json` only**. The Watchlist draws on the 50 highest-risk satellites; the **Rank by** dropdown orders them and **Objects** shows the first N of that order (10 to 50).
+The Watchlist, Re-entry Tracker and Conjunctions & Triage tabs show and screen **active satellites from `active.json` only**. The Re-entry Tracker and screening pickers list those same 50 highest-risk satellites. The Watchlist draws on them; the **Rank by** dropdown orders them and **Objects** shows the first N of that order (10 to 50).
 Debris (`data/debris/`: Fengyun-1C, Iridium-33, Cosmos-2251; CelesTrak JSON or 3-line TLE, parsed by `debris.py`) is used in two ways:
 
 - **Orbital view:** the Watchlist globe can draw debris orbits (the **Debris** box; 0 = hidden).
