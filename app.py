@@ -152,7 +152,7 @@ def start_time(mode: str):
 # ---------------------------------------------------------------- Watchlist
 with tab_watch:
     st.subheader("Watchlist")
-    c_mode, c_n, c_d = st.columns([3, 1, 1])
+    c_mode, c_n = st.columns([3, 1])
     mode = c_mode.selectbox("Rank by", ["Risk score: highest first", "Risk score: lowest first",
                                       "Soonest estimated re-entry"],
                             help="The watchlist draws on the 50 highest-risk active satellites; this orders them and the first "
@@ -160,8 +160,12 @@ with tab_watch:
     n_show = c_n.number_input("Objects", 10, WATCHLIST_SIZE, WATCHLIST_SIZE, step=10,
                               help="How many to show: the first N of the 50 highest-risk satellites in the chosen order.")
     n_deb_total = int((df["source"] == "debris").sum())
-    n_deb_show = c_d.number_input("Debris", 0, n_deb_total, 0, step=50,
-                                  help="Debris is not part of the watchlist; this draws that many debris orbits on the globe for context, highest ranked first. 0 = hidden.")
+    show_debris = st.toggle("Show debris orbits on globe", value=False,
+                            help="Debris is not part of the watchlist; this only draws debris orbits on the globe for context.")
+    n_deb_show = 0
+    if show_debris:
+        n_deb_show = st.slider("Debris orbits to draw", 50, n_deb_total, min(300, n_deb_total), step=50,
+                               help="Highest-risk debris first.")
 
     weights = decay.DEFAULT_WEIGHTS  # fixed: not adjustable in the app
 
@@ -210,8 +214,8 @@ with tab_watch:
         return "data:image/svg+xml;utf8," + urllib.parse.quote(svg, safe="")
 
     shown_table = table.assign(**{"Risk score": [risk_bar(s, l) for s, l in zip(top["risk"], levels)]})
-    st.dataframe(
-        shown_table, width="stretch", hide_index=True,
+    event = st.dataframe(
+        shown_table, width="stretch", hide_index=True, key="watch_table", on_select="rerun", selection_mode="single-row",
         column_config={
             "Perigee (km)": st.column_config.NumberColumn(format="%.1f"),
             "Apogee (km)": st.column_config.NumberColumn(format="%.1f"),
@@ -221,6 +225,17 @@ with tab_watch:
             "Risk score": st.column_config.ImageColumn("Risk score", width="medium"),
         },
     )
+    st.download_button("Download CSV", data=table.assign(**{"NORAD ID": top["NORAD_CAT_ID"].astype(int)})
+                       .assign(Level=levels.map({"red": "High", "yellow": "Medium", "green": "Low"}))
+                       .to_csv(index=False).encode("utf-8"),
+                       file_name="orbisk_watchlist.csv", mime="text/csv")
+    # selecting a row opens that object in the Re-entry Tracker (set once per new selection so the picker stays usable)
+    picked = event.selection.rows
+    picked_id = table_ids[picked[0]] if picked and picked[0] < len(table_ids) else None
+    switch_tab = picked_id is not None and picked_id != st.session_state.get("_watch_picked")
+    st.session_state["_watch_picked"] = picked_id
+    if switch_tab:
+        st.session_state["tracker_obj"] = picked_id
     if ca_meta is None or not top["ca_screened"].all():
         st.caption("Close-approach columns are filled for the highest-risk objects only (`tools/compute_conjunctions.py`); "
                    "— means not screened or no approach within the threshold.")
@@ -230,7 +245,7 @@ with tab_track:
     # the same 50 highest-risk active satellites as the watchlist pool, highest risk first
     ids = sats.sort_values("risk", ascending=False).head(WATCHLIST_SIZE)["NORAD_CAT_ID"].astype(int).tolist()
     default = 0
-    norad = st.selectbox("Object", ids, index=default, format_func=label)
+    norad = st.selectbox("Object", ids, format_func=label, key="tracker_obj")
     row = df[df["NORAD_CAT_ID"] == norad].iloc[0]
     record = records[int(norad)]
     name = record["OBJECT_NAME"]
@@ -500,3 +515,17 @@ if (!P.__orbiskDrag) {
   P.addEventListener("resize", () => { try { const s = JSON.parse(P.localStorage.getItem(KEY)); if (s) apply(s[0], s[1]); } catch (e) {} });
 }
 </script>""", height=0)
+
+if switch_tab:  # jump to the Re-entry Tracker tab (Streamlit has no API for this, so click the tab header once the run is done)
+    components.html("""<script>
+    const D = window.parent.document;
+    let tries = 0;
+    const go = setInterval(() => {
+      tries += 1;
+      const busy = D.querySelector('[data-testid="stStatusWidget"]');
+      if (!busy || tries > 150) {
+        clearInterval(go);
+        for (const t of D.querySelectorAll('[role="tab"]')) { if (t.textContent.trim() === "Re-entry Tracker") { t.click(); break; } }
+      }
+    }, 100);
+    </script>""", height=0)
