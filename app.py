@@ -1,5 +1,6 @@
 """Re-Entry & Debris Mitigation Assistant (Streamlit UI). Physics lives in the other modules."""
 import base64
+import html
 import os
 import urllib.parse
 from pathlib import Path
@@ -337,6 +338,15 @@ def events_table(ev: pd.DataFrame) -> pd.DataFrame:
     })
 
 
+def miss_band(miss_km: float) -> tuple[str, str]:
+    """(label, colour) for a miss distance: red under 5 km, yellow under 15 km, green otherwise."""
+    if miss_km < 5:
+        return "Under 5 km", "#e5484d"
+    if miss_km < 15:
+        return "5 to 15 km", "#e0a800"
+    return "15 km or more", "#30a46c"
+
+
 EVENT_CONFIG = {
     "NORAD ID": st.column_config.NumberColumn(format="%d"),
     "Miss distance (km)": st.column_config.NumberColumn(format="%.2f"),
@@ -348,6 +358,9 @@ EVENT_CONFIG = {
 
 with tab_triage:
     st.subheader("Conjunctions & triage")
+    st.markdown("Pick one of the watchlist satellites, a time window and a distance. Orbisk flies that satellite and every other "
+                "satellite and debris fragment in a similar altitude band forward in time and lists the passes closer than your "
+                "distance. The closest ones appear first as colour-coded cards. This is a screening aid, not a collision probability.")
     asset_ids = ids  # the 50 highest-risk active satellites, same as the watchlist
     with st.form("tri_asset_form"):
         a1, a2, a3 = st.columns([3, 1, 1])
@@ -379,7 +392,26 @@ with tab_triage:
         if not len(ev):
             st.success("No close approaches against any catalogue object inside the threshold in this window.")
         else:
-            st.dataframe(events_table(ev), width="stretch", hide_index=True, column_config=EVENT_CONFIG)
+            table_ev = events_table(ev)
+            closest = ev.sort_values("miss_km").head(6)
+            st.markdown("**Closest passes**")
+            card_cols = st.columns(3)
+            for k, r in enumerate(closest.itertuples()):
+                band = miss_band(r.miss_km)
+                with card_cols[k % 3]:
+                    st.markdown(
+                        f'<div style="border:1px solid rgba(128,128,128,.35);border-left:6px solid {band[1]};border-radius:8px;'
+                        f'padding:.6rem .8rem;margin-bottom:.6rem">'
+                        f'<div style="font-weight:600">{html.escape(str(r.name))}</div>'
+                        f'<div style="font-size:.8rem;opacity:.7">NORAD {int(r.norad_id)}</div>'
+                        f'<div style="font-size:1.6rem;font-weight:600;color:{band[1]}">{r.miss_km:.2f} km</div>'
+                        f'<div style="font-size:.8rem">{band[0]} · {fmt_utc(r.tca_jd)} UTC · {r.rel_speed_km_s:.1f} km/s</div></div>',
+                        unsafe_allow_html=True)
+            if len(ev) > len(closest):
+                st.caption(f"Showing the {len(closest)} closest of {len(ev)} passes; all of them are in the table below.")
+            st.dataframe(table_ev, width="stretch", hide_index=True, column_config=EVENT_CONFIG)
+            st.download_button("Download CSV", data=table_ev.to_csv(index=False).encode("utf-8"),
+                               file_name=f"orbisk_conjunctions_{res['asset']}.csv", mime="text/csv", key="tri_csv")
 
 # floating chat launcher (top-right, below Streamlit's toolbar); the popover opens downward and closes with the same button
 st.markdown(

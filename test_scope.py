@@ -133,3 +133,26 @@ def test_clicking_a_suggestion_asks_the_assistant(monkeypatch):
     assert not at.exception
     assert seen == ["Which satellites have the soonest estimated re-entry?"]
     assert not [b for b in at.button if b.key and b.key.startswith("ai_suggest_")]  # hidden once the chat has started
+
+
+def test_triage_cards_and_bands():
+    import ast
+    src = open("app.py").read()
+    fn = next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "miss_band")
+    ns = {}
+    exec(compile(ast.Module([fn], []), "app.py", "exec"), ns)
+    mb = ns["miss_band"]
+    assert [mb(x)[1] for x in (0.5, 4.99, 5.0, 14.9, 15.0, 80)] == \
+        ["#e5484d", "#e5484d", "#e0a800", "#e0a800", "#30a46c", "#30a46c"]
+
+
+def test_triage_shows_intro_then_cards_table_and_csv():
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file("app.py", default_timeout=600).run()
+    assert any("Pick one of the watchlist satellites" in m.value for m in at.markdown)  # explanation before running
+    next(b for b in at.button if b.label == "Run screening").click()
+    at.run()
+    assert not at.exception
+    cards = [m.value for m in at.markdown if "border-left:6px solid" in m.value]
+    assert cards and len(cards) <= 6
+    assert all(c.startswith("<div") and "\n" not in c for c in cards)  # one line: markdown would treat indented HTML as code
