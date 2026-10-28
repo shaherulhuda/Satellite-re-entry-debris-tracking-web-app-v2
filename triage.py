@@ -34,10 +34,11 @@ def _screen(primary: dict, catalogue: pd.DataFrame, candidates: pd.DataFrame, re
             hours: float, threshold_km: float):
     pid = int(primary["NORAD_CAT_ID"])
     row = catalogue[catalogue["NORAD_CAT_ID"] == pid].iloc[0]
-    step = 10.0 if hours <= 12 else (20.0 if hours <= 36 else 30.0)  # keeps long windows affordable
-    events, n = conjunction.screen(primary, candidates, records, start_jd, hours=hours, step_s=step,
-                                   threshold_km=threshold_km, primary_band=(float(row["perigee_km"]), float(row["apogee_km"])))
-    return _enrich(events, catalogue), n
+    events, n = conjunction.screen(primary, candidates, records, start_jd, hours=hours, threshold_km=threshold_km,
+                                   primary_band=(float(row["perigee_km"]), float(row["apogee_km"])))
+    out = _enrich(events, catalogue)
+    out.attrs.update(events.attrs)  # keeps window_hours_effective
+    return out, n
 
 
 def screen_asset_vs_debris(asset: dict, catalogue: pd.DataFrame, records: dict, start_jd: float,

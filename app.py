@@ -286,7 +286,8 @@ with tab_triage:
             a1, a2, a3 = st.columns([3, 1, 1])
             asset = a1.selectbox("Object to screen", asset_ids,
                                  index=asset_ids.index(25544) if 25544 in asset_ids else 0, format_func=label)
-            hours = a2.slider("Window (h)", 1, 72, 48)
+            days = a2.slider("Window (days)", 1, 30, 2)
+            hours = days * 24
             thr = a3.slider("Report within (km)", 1, 100, 25)
             run = st.form_submit_button("Run screening")
         if run:
@@ -298,7 +299,7 @@ with tab_triage:
                 except Exception as exc:
                     st.error(f"Screening failed: {exc}")
                 else:
-                    st.session_state["tri_asset"] = {"asset": int(asset), "events": ev, "n": n, "hours": hours, "thr": thr,
+                    st.session_state["tri_asset"] = {"asset": int(asset), "events": ev, "n": n, "hours": ev.attrs.get("window_hours_effective", hours), "asked": hours, "thr": thr,
                                                      "start": ts0.strftime("%Y-%m-%d %H:%M")}
         res = st.session_state.get("tri_asset")
         if res:
@@ -307,8 +308,10 @@ with tab_triage:
             m1.metric("Objects in a similar altitude band", f"{res['n']:,}")
             m2.metric(f"Passes within {res['thr']} km", f"{len(ev)}")
             m3.metric("Closest pass", f"{ev['miss_km'].min():.1f} km" if len(ev) else "none")
-            st.caption(f"{records[res['asset']]['OBJECT_NAME']} · window from {res['start']} UTC for {res['hours']} h. "
-                       "Objects holding within ~20 km of each other the whole window (docked/formation) are ignored.")
+            st.caption(f"{records[res['asset']]['OBJECT_NAME']} · window from {res['start']} UTC for {res['hours'] / 24:g} days. "
+                       "Objects holding within ~20 km of each other the whole window (docked/formation) are ignored."
+                       + (f" The object's orbit ends after {res['hours'] / 24:.1f} days, so only that part was screened."
+                          if res["hours"] < res["asked"] - 1 else ""))
             if not len(ev):
                 st.success("No close approaches against any catalogue object inside the threshold in this window.")
             else:
@@ -355,7 +358,8 @@ with tab_triage:
         st.markdown("#### 2. Who it passes close to")
         with st.form("tri_deb_form"):
             b1, b2 = st.columns(2)
-            dh = b1.slider("Window (h)", 6, 48, 24)
+            dd = b1.slider("Window (days)", 1, 30, 1)
+            dh = dd * 24
             dthr = b2.slider("Report within (km)", 5, 100, 25)
             drun = st.form_submit_button("Screen against active satellites")
         if drun:
@@ -366,12 +370,12 @@ with tab_triage:
                 except Exception as exc:
                     st.error(f"Screening failed: {exc}")
                 else:
-                    st.session_state["tri_threat"] = {"deb": int(dsel), "events": thr_ev, "n": thr_n, "hours": dh,
+                    st.session_state["tri_threat"] = {"deb": int(dsel), "events": thr_ev, "n": thr_n, "hours": thr_ev.attrs.get("window_hours_effective", dh),
                                                       "thr": dthr, "start": ts0.strftime("%Y-%m-%d %H:%M")}
         tres = st.session_state.get("tri_threat")
         if tres and tres["deb"] == int(dsel):
             st.write(f"{tres['n']:,} satellites in a similar altitude band · **{len(tres['events'])}** passes within {tres['thr']} km "
-                     f"in the {tres['hours']} h from {tres['start']} UTC")
+                     f"in the {tres['hours'] / 24:g} days from {tres['start']} UTC")
             if len(tres["events"]):
                 st.dataframe(events_table(tres["events"]), width="stretch", hide_index=True, column_config=EVENT_CONFIG)
 
