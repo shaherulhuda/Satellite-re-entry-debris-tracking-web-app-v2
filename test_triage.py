@@ -25,13 +25,15 @@ def world():
 
 
 # ---- debris file
-def test_bundled_debris_file_parses_fully_and_matches_sgp4_tle_parser():
-    text = debris.DEBRIS_PATH.read_text()
+SAMPLE_TLE = debris.Path(__file__).with_name("testdata") / "fengyun1c_sample.tle"
+
+
+def test_tle_parser_matches_sgp4_tle_parser():
+    text = SAMPLE_TLE.read_text()
     recs, skipped = debris.parse_tle_text(text)
-    assert len(recs) == 1983 and skipped == 0
-    assert {r['GROUP'] for r in debris.load_debris_records()} >= {'Fengyun-1C'}
+    assert len(recs) == 30 and skipped == 0
     lines = [ln for ln in text.splitlines() if ln.strip()]
-    for k in (0, 700, 1982):
+    for k in (0, 15, 29):
         ref = Satrec.twoline2rv(lines[3 * k + 1], lines[3 * k + 2])
         mine = triage.conjunction.to_satrec(recs[k])
         _, r1, _ = ref.sgp4(ref.jdsatepoch, ref.jdsatepochF + 0.25)

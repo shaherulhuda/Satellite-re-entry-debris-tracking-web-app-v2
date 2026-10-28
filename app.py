@@ -377,6 +377,11 @@ with tab_triage:
         if res:
             arow = df[df["NORAD_CAT_ID"] == res["asset"]].iloc[0]
             ev = res["events"]
+            gap = abs((pd.Timestamp(res["start"]) - arow["EPOCH_DT"]).total_seconds()) / 86400.0
+            if gap > 3:
+                st.warning(f"This satellite's element set is {gap:.0f} days away from the window start, so its predicted position "
+                           "is extrapolated and the results below are unreliable. Refresh `active.json` (see "
+                           "`tools/refresh_data.py`) so every data set shares one snapshot.")
             m1, m2, m3 = st.columns(3)
             m1.metric("Debris in a similar altitude band", f"{res['n']:,}")
             m2.metric(f"Passes within {res['thr']} km", f"{len(ev)}")
@@ -483,6 +488,8 @@ with tab_triage:
                     st.session_state.pop("memo_eol", None)
         tres = st.session_state.get("tri_threat")
         if tres and tres["deb"] == int(dsel):
+            if abs((pd.Timestamp(tres["start"]) - drow["EPOCH_DT"]).total_seconds()) / 86400.0 > 3:
+                st.warning("This debris object's element set is several days from the window start; results are less reliable.")
             st.write(f"{tres['n']:,} satellites in a similar altitude band · **{len(tres['events'])}** passes within {tres['thr']} km "
                      f"in the {tres['hours']} h from {tres['start']} UTC")
             if len(tres["events"]):

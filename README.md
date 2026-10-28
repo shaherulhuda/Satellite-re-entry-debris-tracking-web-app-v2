@@ -14,7 +14,7 @@ access code and `ASSISTANT_MAX_REQUESTS` (default 30) to cap requests per sessio
 
 ## Debris data and the Triage desk
 
-`data/fengyun1c_debris.tle` holds 1,983 Fengyun-1C breakup objects (3-line TLE format). `debris.py` parses them into the
+`data/debris/` holds the debris groups (Fengyun-1C, Iridium-33, Cosmos-2251; CelesTrak JSON or 3-line TLE). `debris.py` parses them into the
 same record format as `active.json`, so they flow through every feature (watchlist, tracker, conjunctions, chat tools).
 
 The **Triage desk** tab has two views:

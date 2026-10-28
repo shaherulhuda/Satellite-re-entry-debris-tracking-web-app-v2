@@ -27,7 +27,7 @@ def omm(norad, epoch, name="X DEB", mm=14.0):
 
 # ---- loader
 def test_loader_reads_tle_and_json_groups_and_dedupes(tmp_path):
-    (tmp_path / "fengyun-1c.tle").write_text(debris.DEBRIS_PATH.read_text())
+    (tmp_path / "fengyun-1c.tle").write_text((debris.Path(__file__).with_name("testdata") / "fengyun1c_sample.tle").read_text())
     json.dump([omm(900001, "2026-10-20T00:00:00", "IRIDIUM 33 DEB"), omm(900002, "2026-10-20T00:00:00", "IRIDIUM 33 DEB")],
               open(tmp_path / "iridium-33.json", "w"))
     json.dump([omm(900002, "2026-10-21T00:00:00", "NEWER COPY"), omm(900003, "2026-10-21T00:00:00", "COSMOS 2251 DEB"),
@@ -35,7 +35,7 @@ def test_loader_reads_tle_and_json_groups_and_dedupes(tmp_path):
     (tmp_path / "notes.md").write_text("ignored")
     recs = debris.load_debris_records(tmp_path)
     by = {r["NORAD_CAT_ID"]: r for r in recs}
-    assert len(recs) == 1983 + 3
+    assert len(recs) == 30 + 3
     assert by[900001]["GROUP"] == "Iridium-33" and by[900003]["GROUP"] == "Cosmos-2251"
     assert by[900002]["OBJECT_NAME"] == "NEWER COPY"  # newer epoch wins across groups
     assert debris.load_debris_records(tmp_path / "missing") == []
@@ -143,3 +143,13 @@ def test_real_data_is_consistent_enough():
 def test_health_reports_age_against_now():
     h = snapshot.health(frame([(None, "2026-10-07", 10)]), now=pd.Timestamp("2026-10-28"))
     assert h["newest_age_days"] == pytest.approx(21.0, abs=0.1)
+
+
+def test_bundled_debris_groups_load():
+    recs = debris.load_debris_records()
+    groups = {}
+    for r in recs:
+        groups[r["GROUP"]] = groups.get(r["GROUP"], 0) + 1
+    assert set(groups) == {"Fengyun-1C", "Iridium-33", "Cosmos-2251"}
+    assert all(n > 50 for n in groups.values())
+    assert len({r["NORAD_CAT_ID"] for r in recs}) == len(recs)

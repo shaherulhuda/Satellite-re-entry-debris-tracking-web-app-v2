@@ -10,7 +10,6 @@ import json
 from pathlib import Path
 
 DEBRIS_DIR = Path(__file__).with_name("data") / "debris"
-DEBRIS_PATH = DEBRIS_DIR / "fengyun-1c.tle"  # the originally supplied file
 
 # group slug (file name) -> (label shown in the app, CelesTrak GROUP query used by tools/refresh_data.py)
 GROUPS = {
