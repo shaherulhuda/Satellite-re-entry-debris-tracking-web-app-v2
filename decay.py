@@ -179,12 +179,15 @@ def risk_score(components: pd.DataFrame, weights: dict | None = None) -> pd.Seri
     return 100.0 * score / total
 
 
-def traffic_light(score: pd.Series, red_share: float = 0.2, green_share: float = 0.2) -> pd.Series:
-    """Level by rank within the given objects: top 20% 'red', bottom 20% 'green', the middle 'yellow'.
+RED_COUNT, YELLOW_COUNT = 10, 30  # overall risk ranks 1-10 red, 11-40 yellow, the rest green
 
-    For 50 objects that is 10 red, 30 yellow, 10 green.
+
+def traffic_light(score: pd.Series, n_red: int = RED_COUNT, n_yellow: int = YELLOW_COUNT) -> pd.Series:
+    """Level from each object's risk rank across everything scored (rank 1 = highest score).
+
+    The 10 highest-risk objects are 'red', the next 30 'yellow', all others 'green'. The level belongs to
+    the object, not to how many are listed: a list of 50 shows 10 red, 30 yellow, 10 green; a list of 10 is all red.
     """
-    n = len(score)
-    n_red, n_green = int(round(n * red_share)), int(round(n * green_share))
     rank = score.rank(method="first", ascending=False)
-    return pd.Series(np.where(rank <= n_red, "red", np.where(rank > n - n_green, "green", "yellow")), index=score.index)
+    return pd.Series(np.where(rank <= n_red, "red", np.where(rank <= n_red + n_yellow, "yellow", "green")),
+                     index=score.index)

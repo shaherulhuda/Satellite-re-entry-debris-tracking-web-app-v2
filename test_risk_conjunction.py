@@ -39,12 +39,15 @@ def test_default_weights_sum_to_one_and_each_term_moves_the_score():
         assert only.iloc[0] > only.iloc[1] == 0
 
 
-def test_traffic_light_counts():
-    s = pd.Series(np.linspace(100, 1, 50))
+def test_traffic_light_is_by_overall_rank():
+    s = pd.Series(np.linspace(100, 1, 200))
     lv = decay.traffic_light(s)
-    assert lv.value_counts().to_dict() == {"yellow": 30, "red": 10, "green": 10}
-    assert set(lv.iloc[:10]) == {"red"} and set(lv.iloc[-10:]) == {"green"}  # by rank, highest score = red
-    assert decay.traffic_light(pd.Series(range(10))).value_counts().to_dict() == {"yellow": 6, "red": 2, "green": 2}
+    assert lv.iloc[:10].eq("red").all() and lv.iloc[10:40].eq("yellow").all() and lv.iloc[40:].eq("green").all()
+    # listing the top 50 gives 10 red / 30 yellow / 10 green; listing the top 10 gives all red
+    assert lv.iloc[:50].value_counts().to_dict() == {"yellow": 30, "red": 10, "green": 10}
+    assert lv.iloc[:10].eq("red").all()
+    shuffled = s.sample(frac=1, random_state=1)
+    assert decay.traffic_light(shuffled).value_counts().to_dict() == {"green": 160, "yellow": 30, "red": 10}
     assert len(decay.traffic_light(pd.Series([5.0]))) == 1
 
 

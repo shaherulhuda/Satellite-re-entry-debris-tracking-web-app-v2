@@ -144,7 +144,7 @@ with tab_watch:
         ranked = ranked.sort_values("perigee_km")
     top = ranked.head(int(n_show))
 
-    levels = decay.traffic_light(top["risk"])
+    levels = decay.traffic_light(ranked["risk"]).loc[top.index]  # level = overall risk rank, whatever is listed
     LEVEL_LABEL = {"red": "🔴 High", "yellow": "🟡 Medium", "green": "🟢 Low"}
     hours_txt = ["—" if pd.isna(h) else f"{h:.1f} h" for h in top["ca_hours"]]
     table = pd.DataFrame({
@@ -471,7 +471,8 @@ with st.expander("How these numbers are computed"):
         "from the snapshot time: 1 km = 1, 25 km or more = 0), relative speed 10% (km/s over 15) and time to closest approach 10% "
         "(within 6 h = 1, 24 h or more = 0); the last two only count when the miss is under 25 km. Close-approach results are precomputed "
         "for the highest-risk objects.\n"
-        "- **Colour levels:** of the objects listed, the top 20% by risk are red, the next 60% yellow and the last 20% green (10 / 30 / 10 for 50 objects).\n"
+        "- **Colour levels:** by overall risk rank: the 10 highest-risk objects are red, the next 30 yellow, all others green "
+        "(so 50 listed objects show 10 / 30 / 10, and a list of 10 is all red).\n"
         "- **Footprint:** latitude band ±min(i, 180−i); time per latitude from sin φ = sin i · sin u.\n"
         "- **Conjunctions:** coarse-grid SGP4 screening with 0.5 s refinement of local minima, against every satellite and debris fragment.\n"
         "- **Debris and triage:** the debris groups (TLE or CelesTrak JSON files in data/debris) are parsed into the same record format and screened with the same SGP4 conjunction code. "

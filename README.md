@@ -46,7 +46,7 @@ Any extra `.tle` / `.json` file dropped into `data/debris/` is loaded as another
 The Watchlist risk score blends seven terms (weights adjustable in the app): perigee, estimated decay time, inclination, object
 type, and three close-approach terms: **miss distance**, **relative speed** and **time to closest approach**. The close-approach
 terms use each object's closest pass to any satellite or debris in the 24 hours after the snapshot time. The listed objects are
-coloured by rank: the top 20% red, the middle 60% yellow, the bottom 20% green (10 / 30 / 10 for 50 objects).
+coloured by overall risk rank: the 10 highest-risk objects are red, the next 30 yellow, all others green (so 50 listed objects show 10 / 30 / 10, and a list of 10 is all red).
 
 Screening every object would be too slow for the web app, so `tools/compute_conjunctions.py` precomputes the closest approach for
 the highest-risk objects (default 300) into `data/closest_approaches.json`. Re-run it after `tools/refresh_data.py`.
