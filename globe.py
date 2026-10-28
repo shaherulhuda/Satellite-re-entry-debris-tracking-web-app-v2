@@ -132,7 +132,22 @@ _JS = """
       if (showDeb) { forceDebLines = true; render(0); }
     };
   }
-  gd.addEventListener('pointerdown', () => { spin = false; rot.checked = false; });
+  // Zoom only after the globe has been clicked, and only while the pointer stays on it. Until then the wheel is not
+  // passed to the chart, so scrolling the page with the pointer over the globe scrolls the page instead of zooming.
+  let active = false, hintTimer = null;
+  const hint = document.createElement('div');
+  hint.textContent = 'Click the globe, then scroll to zoom';
+  hint.style.cssText = 'position:absolute;bottom:12px;left:50%;transform:translateX(-50%);z-index:10;font:12px sans-serif;' +
+    'color:#dde6f5;background:rgba(10,18,34,.8);padding:5px 12px;border-radius:999px;opacity:0;transition:opacity .25s;pointer-events:none';
+  document.body.appendChild(hint);
+  gd.addEventListener('wheel', (e) => {
+    if (active) return;
+    e.stopImmediatePropagation();         // plotly never sees it, so nothing calls preventDefault and the page scrolls
+    hint.style.opacity = '1'; clearTimeout(hintTimer); hintTimer = setTimeout(() => { hint.style.opacity = '0'; }, 1200);
+  }, true);
+  gd.addEventListener('pointerdown', () => { active = true; hint.style.opacity = '0'; spin = false; rot.checked = false; });
+  gd.addEventListener('mouseleave', () => { active = false; });
+  document.addEventListener('mouseleave', () => { active = false; });
 
   function render(dt) {
     const th = WE * s, c = Math.cos(th), sn = Math.sin(th);
