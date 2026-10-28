@@ -3,8 +3,11 @@ Satellite re-entry debris tracking web app v2
 
 ## Optional AI assistant
 
-The app runs fully offline. The **Assistant (AI)** tab (object briefing, risk explanation, "ask the data" chat) only works
-when you supply an Anthropic API key, and the model only sees numbers computed by this repo's own code.
+The app runs fully offline. The **Ask the assistant** popup (ask the data, object briefing, risk explanation, recommended
+action) only works when you supply an Anthropic API key, and the model only sees numbers computed by this repo's own code.
+It defaults to Claude Haiku 4.5 (as in the project proposal; Sonnet and Opus are in the dropdown), knows how the app and
+risk score work, and the monitor / prepare / act suggestion comes from fixed rules in `llm.suggested_action`, which the model only
+explains. To check it against your key: `ANTHROPIC_API_KEY=... python tools/check_assistant.py`.
 
 - Paste a key into the tab (kept in the browser session only), **or**
 - set `ANTHROPIC_API_KEY` as an environment variable / in `.streamlit/secrets.toml`.
@@ -14,7 +17,7 @@ access code and `ASSISTANT_MAX_REQUESTS` (default 30) to cap requests per sessio
 
 ## Debris data and scope
 
-The Watchlist, Re-entry Tracker and Conjunctions & Triage tabs show and screen **active satellites from `active.json` only**. The Re-entry Tracker and screening pickers list those same 50 highest-risk satellites. The Watchlist draws on them; the **Rank by** dropdown orders them and **Objects** shows the first N of that order (10 to 50).
+The app is **low Earth orbit only**: the Watchlist, Re-entry Tracker and Conjunctions & Triage tabs (and the assistant) cover **active satellites from `active.json` with mean altitude and perigee below 2,000 km**. Higher orbits (GEO/MEO) are never listed but still count as screening partners. The Re-entry Tracker and screening pickers list those same 50 highest-risk satellites. The Watchlist draws on them; the **Rank by** dropdown orders them and **Objects** shows the first N of that order (10 to 50).
 Debris (`data/debris/`: Fengyun-1C, Iridium-33, Cosmos-2251; CelesTrak JSON or 3-line TLE, parsed by `debris.py`) is used in two ways:
 
 - **Orbital view:** the Watchlist globe can draw debris orbits (the **Debris** box; 0 = hidden).

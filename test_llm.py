@@ -103,3 +103,19 @@ def test_explain_sends_only_app_facts(ctx):
     out, usage = llm.explain(fake, "claude-opus-5-5", facts, llm.BRIEFING_TASK)
     sent = fake.calls[0]["messages"][0]["content"]
     assert out == "Brief." and '"norad_id": 25544' in sent and "tools" not in fake.calls[0]
+
+
+def test_default_model_is_haiku_and_system_prompt_explains_the_app():
+    assert llm.DEFAULT_MODEL == "claude-haiku-4-5" and next(iter(llm.MODELS)) == llm.DEFAULT_MODEL
+    for phrase in ("2,000 km", "Re-entry Tracker", "miss distance 25%", "Recommended action"):
+        assert phrase in llm.SYSTEM_BASE
+    assert "seven components" in llm.RISK_TASK
+
+
+def test_recommendation_prompt_is_grounded_in_facts(ctx):
+    client = FakeClient([NS(content=[NS(type="text", text="ok")], stop_reason="end_turn",
+                            usage=NS(input_tokens=1, output_tokens=1))])
+    facts = llm.object_facts(ctx, 25544, include_position=False)
+    llm.explain(client, llm.DEFAULT_MODEL, facts, llm.RECOMMEND_TASK)
+    sent = client.calls[0]["messages"][0]["content"]
+    assert "suggested_action" in sent and "monitor / prepare / act" in sent

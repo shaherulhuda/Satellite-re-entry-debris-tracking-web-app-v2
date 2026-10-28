@@ -148,7 +148,7 @@ with tab_watch:
             return frame.sort_values("risk", ascending=mode.endswith("lowest first"))
         return frame.sort_values("decay_days", na_position="last")  # soonest estimated re-entry
 
-    sats = scored[scored["source"] == "active"]  # the watchlist covers active satellites only, not debris
+    sats = scored[(scored["source"] == "active") & scored["leo"]]  # active LEO satellites only (not debris, not GEO/MEO)
     # the pool is always the WATCHLIST_SIZE highest-risk satellites; the order option sorts them and Objects shows the first N
     top = sort_by_mode(sats.sort_values("risk", ascending=False).head(WATCHLIST_SIZE)).head(int(n_show))
 
@@ -355,9 +355,10 @@ with st.container(key="ai_fab"):
 
                 guarded = ai_guarded
 
-                t_chat, t_brief, t_risk = st.tabs(["Ask the data", "Object briefing", "Risk explanation"])
+                t_chat, t_brief, t_risk, t_rec = st.tabs(["Ask the data", "Object briefing", "Risk explanation", "Recommended action"])
                 for tab, kind, task, button in ((t_brief, "brief", llm.BRIEFING_TASK, "Generate briefing"),
-                                                (t_risk, "risk", llm.RISK_TASK, "Explain risk score")):
+                                                (t_risk, "risk", llm.RISK_TASK, "Explain risk score"),
+                                                (t_rec, "rec", llm.RECOMMEND_TASK, "Recommend next steps")):
                     with tab:
                         pick = st.selectbox("Object", ids, index=default, format_func=label, key=f"ai_pick_{kind}")
                         facts = llm.object_facts(ctx, int(pick))
@@ -374,8 +375,8 @@ with st.container(key="ai_fab"):
                             st.json(facts)
 
                 with t_chat:
-                    st.caption("Examples: *Which objects below 200 km have an inclination over 50°?* · "
-                               "*Why is STARLINK-1433 ranked so high?* · *Any close approaches for the ISS in the next 6 hours?*")
+                    st.caption("Examples: *Which red satellites have the closest approaches?* · *Why is STARLINK-1433 ranked so high?* · "
+                               "*What should we do about the ISS?* · *How is the risk score calculated?*")
                     chat_hist = st.session_state.setdefault("ai_chat", [])
                     for m in chat_hist:
                         with st.chat_message(m["role"]):
@@ -419,6 +420,8 @@ with st.expander("How these numbers are computed"):
         "(the watchlist draws on the 50 highest-risk satellites, so all 50 show 10 / 30 / 10; fewer are the first N of them in the chosen order). Debris is not on the watchlist; it can be drawn on the globe.\n"
         "- **Footprint:** latitude band ±min(i, 180−i); time per latitude from sin φ = sin i · sin u.\n"
         "- **Conjunctions:** coarse-grid SGP4 screening with 0.5 s refinement of local minima, against every satellite and debris fragment.\n"
+        "- **Scope:** low Earth orbit (LEO) only: the watchlist, tracker, screening and assistant cover active satellites with a mean altitude and perigee below 2,000 km. "
+        "Objects in higher orbits are not listed (a higher orbit that crosses LEO still counts as a close-approach partner).\n"
         "- **Debris:** the debris groups (TLE or CelesTrak JSON files in data/debris) are parsed into the same record format. They are not on the watchlist "
         "or in the pickers; they are only drawn as orbits on the Watchlist globe and used as close-approach partners when an active satellite is screened "
         "(Conjunctions & Triage, and the close-approach terms of the risk score). Altitude and risk figures are for active satellites only."

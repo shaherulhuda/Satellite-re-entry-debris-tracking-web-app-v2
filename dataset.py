@@ -14,16 +14,19 @@ import orbits
 
 CA_PATH = Path(__file__).with_name("data") / "closest_approaches.json"
 CA_COLUMNS = ["ca_miss_km", "ca_speed_km_s", "ca_hours", "ca_with"]
+LEO_MAX_KM = 2000.0  # low Earth orbit: mean altitude and perigee below 2,000 km
 
 
 def load_catalogue() -> tuple[pd.DataFrame, dict]:
-    """(catalogue frame, records by NORAD id). Frame has decay columns, `type` and `source` ('active'/'debris')."""
+    """(catalogue frame, records by NORAD id). Frame has decay columns, `type`, `source` ('active'/'debris')
+    and `leo` (True when the orbit is low Earth orbit; the app lists and ranks LEO satellites only)."""
     active, deb = orbits.load_records(), debris.load_debris_records()
     recs = debris.merge_records(active, deb)
     cat = decay.estimate_decay(orbits.catalog_from_records(recs))
     cat["type"] = cat["OBJECT_NAME"].map(decay.classify_type)
     deb_ids = {r["NORAD_CAT_ID"] for r in deb}
     cat["source"] = np.where(cat["NORAD_CAT_ID"].isin(deb_ids), "debris", "active")
+    cat["leo"] = (decay.mean_altitude_km(cat["MEAN_MOTION"]) < LEO_MAX_KM) & (cat["perigee_km"] < LEO_MAX_KM)
     return cat, {r["NORAD_CAT_ID"]: r for r in recs}
 
 
