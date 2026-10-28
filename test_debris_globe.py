@@ -63,3 +63,15 @@ def test_ground_track_map_fills_the_width():
     rec = orbits.load_records()[0]
     fig = globe.ground_track_figure(orbits.ground_track(rec), orbits.current_position(rec))
     assert fig.layout.yaxis.scaleanchor is None and fig.layout.height >= 440
+
+
+def test_globe_and_charts_are_transparent():
+    import numpy as np
+    import charts
+    import globe
+    path = {"x": np.array([7000.0, 0, -7000, 0]), "y": np.array([0, 7000.0, 0, -7000]), "z": np.zeros(4), "period_s": 5400.0, "name": "A"}
+    html = globe.orbit_html([path])
+    assert "html,body{background:transparent" in html and "color-scheme" not in html.split("</head>")[0]
+    for fig in (charts.decay_figure(400.0, 0.5), charts.footprint_figure(51.6)):
+        assert fig.layout.paper_bgcolor == "rgba(0,0,0,0)" and fig.layout.plot_bgcolor == "rgba(0,0,0,0)"
+        assert fig.layout.xaxis.gridcolor == globe.GRID_COLOR

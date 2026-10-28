@@ -16,7 +16,7 @@ import plotly.graph_objects as go
 from orbits import EARTH_RADIUS_KM as R
 
 DATA = Path(__file__).with_name("data")
-BG = "#05070d"
+BG = "rgba(0,0,0,0)"  # transparent: the page's starfield shows behind the globe
 TIER_COLORS = ("#e5484d", "#f5c518", "#30a46c", "#4fd1e0")  # red, yellow, green, cyan (the screened object)
 
 
@@ -66,6 +66,18 @@ def coastline_trace_2d() -> go.Scatter:
                       hoverinfo="skip", showlegend=False)
 
 
+GRID_COLOR = "rgba(190, 215, 255, 0.14)"
+
+
+def float_on_dark(fig: go.Figure) -> go.Figure:
+    """Transparent background and light grid lines, so a chart floats on the dark starfield page."""
+    fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#dbe6fb"),
+                      legend=dict(bgcolor="rgba(0,0,0,0)"))
+    fig.update_xaxes(gridcolor=GRID_COLOR, zerolinecolor=GRID_COLOR, linecolor=GRID_COLOR)
+    fig.update_yaxes(gridcolor=GRID_COLOR, zerolinecolor=GRID_COLOR, linecolor=GRID_COLOR)
+    return fig
+
+
 def ground_track_figure(track, pos, height: int = 460) -> go.Figure:
     """2D ground track on the bundled coastlines (works offline)."""
     fig = go.Figure(coastline_trace_2d())
@@ -77,7 +89,7 @@ def ground_track_figure(track, pos, height: int = 460) -> go.Figure:
     fig.update_xaxes(range=[-180, 180], title="Longitude (°)", dtick=60)
     fig.update_yaxes(range=[-90, 90], title="Latitude (°)", dtick=30)
     fig.update_layout(height=height, margin=dict(l=0, r=0, t=10, b=0), legend=dict(orientation="h", y=-0.2))
-    return fig
+    return float_on_dark(fig)
 
 
 def _nan_to_null(a):
@@ -259,6 +271,8 @@ def orbit_html(paths: list[dict], height: int = 650, highlight: bool = False, sp
                   "T": p["period_s"]} for p in paths],
     }
     js = _JS.replace("__DATA__", json.dumps(data, separators=(",", ":")))
-    return fig.to_html(full_html=True, include_plotlyjs=True, div_id="globe", post_script=js,
-                       config={"displaylogo": False, "scrollZoom": True},
-                       default_height=f"{height}px")
+    out = fig.to_html(full_html=True, include_plotlyjs=True, div_id="globe", post_script=js,
+                      config={"displaylogo": False, "scrollZoom": True},
+                      default_height=f"{height}px")
+    # transparent iframe (no colour-scheme meta: a scheme that differs from the page's makes the browser paint an opaque backdrop)
+    return out.replace("<head>", "<head><style>html,body{background:transparent!important}</style>", 1)

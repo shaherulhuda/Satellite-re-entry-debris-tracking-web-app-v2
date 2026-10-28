@@ -5,22 +5,7 @@ import os
 import urllib.parse
 from pathlib import Path
 
-import numpy as np
-import pandas as pd
 import streamlit as st
-import streamlit.components.v1 as components
-from sgp4.api import jday
-
-import charts
-import conjunction
-import dataset
-import decay
-import footprint
-import globe
-import history
-import llm
-import orbits
-import triage
 
 ASSETS = Path(__file__).parent / "assets"
 
@@ -31,6 +16,50 @@ def _data_uri(name: str) -> str:
 
 
 st.set_page_config(page_title="Orbisk: Re-Entry & Debris Mitigation", page_icon=str(ASSETS / "orbisk-icon.png"), layout="wide")
+
+# Loading screen: shown first (before the heavy imports and data load) on the first run of a session, replacing Streamlit's
+# grey placeholder bars. It removes itself when the data is ready, and fades away by itself after 25 s so an error can never stay hidden.
+boot = st.empty()
+if "_booted" not in st.session_state:
+    boot.markdown(
+        """<style>
+        .orbisk-boot { position: fixed; inset: 0; z-index: 100000; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            gap: 1.6rem; background: radial-gradient(ellipse at 70% 60%, #12224a 0%, #070b1a 62%); animation: orbisk-boot-out .6s ease 25s forwards; }
+        .orbisk-boot img { height: 64px; width: auto; }
+        .orbisk-boot .orbit { position: relative; width: 96px; height: 96px; }
+        .orbisk-boot .orbit i { position: absolute; border-radius: 50%; }
+        .orbisk-boot .planet { inset: 30px; background: radial-gradient(circle at 35% 30%, #5FE0C8, #14456B); animation: orbisk-beat 1.8s ease-in-out infinite; }
+        .orbisk-boot .ring { inset: 0; border: 1.5px solid rgba(79, 209, 224, .55); animation: orbisk-spin 1.6s linear infinite;
+            background: radial-gradient(circle at 50% 0, #FF7A3D 0 4px, transparent 5px); }
+        .orbisk-boot .ripple { inset: 0; border: 1px solid rgba(79, 209, 224, .5); animation: orbisk-ripple 1.8s ease-out infinite; }
+        .orbisk-boot p { margin: 0; font-size: .9rem; letter-spacing: .08em; color: rgba(232, 238, 252, .7); }
+        @keyframes orbisk-spin { to { transform: rotate(360deg); } }
+        @keyframes orbisk-beat { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.18); } }
+        @keyframes orbisk-ripple { from { transform: scale(.6); opacity: .9; } to { transform: scale(1.5); opacity: 0; } }
+        @keyframes orbisk-boot-out { to { opacity: 0; visibility: hidden; pointer-events: none; } }
+        </style>"""
+        + '<div class="orbisk-boot">'
+        + f'<img alt="Orbisk" src="{_data_uri("orbisk-logo-for-dark.png")}">'
+        + '<div class="orbit"><i class="ripple"></i><i class="planet"></i><i class="ring"></i></div>'
+        + "<p>LOADING ORBITAL DATA</p></div>",
+        unsafe_allow_html=True,
+    )
+
+import numpy as np  # noqa: E402  (imported after the loading screen so it appears immediately)
+import pandas as pd  # noqa: E402
+import streamlit.components.v1 as components  # noqa: E402
+from sgp4.api import jday  # noqa: E402
+
+import charts  # noqa: E402
+import conjunction  # noqa: E402
+import dataset  # noqa: E402
+import decay  # noqa: E402
+import footprint  # noqa: E402
+import globe  # noqa: E402
+import history  # noqa: E402
+import llm  # noqa: E402
+import orbits  # noqa: E402
+import triage  # noqa: E402
 
 WATCHLIST_SIZE = 50  # the watchlist always shows the 50 highest-risk active satellites
 
@@ -52,6 +81,8 @@ def get_history():
 df, records, ca_meta = get_data()
 hist_all = get_history()
 components_df = decay.risk_components(df)
+boot.empty()  # data is ready: remove the loading screen
+st.session_state["_booted"] = True
 
 _CSS = """<style>
 /* ---- space look: starfield page, glass panels, pill tabs, matching scrollbars, tooltips and motion ---- */
@@ -63,11 +94,10 @@ footer, [data-testid="stFooter"] { display: none !important; }
 iframe { border-radius: 14px; }
 
 /* glass panels: soft blur, thin glowing border */
-.st-key-summary_card, [class*="st-key-pass_card_"], [data-testid="stExpander"], [data-testid="stPopoverBody"], [data-testid="stPlotlyChart"], [data-testid="stForm"] {
+.st-key-summary_card, [class*="st-key-pass_card_"], [data-testid="stExpander"], [data-testid="stPopoverBody"], [data-testid="stForm"] {
     background: rgba(12, 20, 44, .55) !important; backdrop-filter: blur(10px) saturate(120%); -webkit-backdrop-filter: blur(10px) saturate(120%);
     border: 1px solid rgba(120, 200, 255, .20) !important; border-radius: 14px !important;
     box-shadow: 0 8px 30px rgba(0, 0, 0, .35), inset 0 0 22px rgba(79, 209, 224, .05); }
-[data-testid="stPlotlyChart"] { padding: .5rem; }
 [data-testid="stDataFrame"] { border-radius: 14px; overflow: hidden; border: 1px solid rgba(120, 200, 255, .20); box-shadow: 0 8px 30px rgba(0, 0, 0, .35); }
 
 /* tabs: pills, orange glow on the active one (sub-tabs are smaller) */
@@ -91,6 +121,8 @@ iframe { border-radius: 14px; }
 ::-webkit-scrollbar-corner { background: transparent; }
 [data-testid="stTooltipContent"] { background: rgba(10, 16, 36, .96) !important; color: #e8eefc !important;
     border: 1px solid rgba(79, 209, 224, .4); border-radius: 8px; box-shadow: 0 4px 18px rgba(0, 0, 0, .5); }
+
+[data-testid="stSkeleton"] { background: rgba(120, 200, 255, .08) !important; border-radius: 12px !important; }
 
 /* motion: cards rise in, pass cards lift on hover, high-risk badge glows */
 @keyframes orbisk-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
