@@ -216,7 +216,8 @@ with tab_watch:
 
     shown_table = table.assign(**{"Risk score": [risk_bar(s, l) for s, l in zip(top["risk"], levels)]})
     event = st.dataframe(
-        shown_table, width="stretch", hide_index=True, key="watch_table", on_select="rerun", selection_mode="single-row",
+        shown_table, width="stretch", hide_index=True, key=f"watch_table_{st.session_state.get('_watch_gen', 0)}", on_select="rerun",
+        selection_mode=["single-row", "single-cell"],  # click any cell (or tick the row) to open the object
         column_config={
             "Perigee (km)": st.column_config.NumberColumn(format="%.1f"),
             "Apogee (km)": st.column_config.NumberColumn(format="%.1f"),
@@ -231,12 +232,13 @@ with tab_watch:
                        .to_csv(index=False).encode("utf-8"),
                        file_name="orbisk_watchlist.csv", mime="text/csv")
     # selecting a row opens that object in the Re-entry Tracker (set once per new selection so the picker stays usable)
-    picked = event.selection.rows
+    picked = list(event.selection.rows) or [c[0] if isinstance(c, (tuple, list)) else c.get("row") for c in event.selection.cells]
     picked_id = table_ids[picked[0]] if picked and picked[0] < len(table_ids) else None
     switch_target = "Re-entry Tracker" if picked_id is not None and picked_id != st.session_state.get("_watch_picked") else None
     st.session_state["_watch_picked"] = picked_id
     if switch_target:
         st.session_state["tracker_obj"] = picked_id
+        st.session_state["_watch_gen"] = st.session_state.get("_watch_gen", 0) + 1  # fresh table next run: the same row can be clicked again
     if ca_meta is None or not top["ca_screened"].all():
         st.caption("Close-approach columns are filled for the highest-risk objects only (`tools/compute_conjunctions.py`); "
                    "— means not screened or no approach within the threshold.")
