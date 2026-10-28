@@ -21,6 +21,8 @@ import triage
 
 st.set_page_config(page_title="Re-Entry & Debris Mitigation Assistant", layout="wide")
 
+WATCHLIST_SIZE = 50  # the watchlist always shows the 50 highest-risk active satellites
+
 
 @st.cache_data
 def get_data():
@@ -125,10 +127,10 @@ def start_time(mode: str):
 # ---------------------------------------------------------------- Watchlist
 with tab_watch:
     st.subheader("Watchlist")
-    c_mode, c_n, c_d = st.columns([3, 1, 1])
+    c_mode, c_d = st.columns([3, 1])
     mode = c_mode.selectbox("Rank by", ["Risk score: highest first", "Risk score: lowest first",
-                                        "Soonest estimated re-entry"])
-    n_show = c_n.number_input("Objects", 10, 200, 50, step=10)
+                                      "Soonest estimated re-entry"],
+                            help="The watchlist is always the 50 highest-risk active satellites; this only changes their order.")
     n_deb_total = int((df["source"] == "debris").sum())
     n_deb_show = c_d.number_input("Debris", 0, n_deb_total, 0, step=50,
                                   help="Debris is not part of the watchlist; this draws that many debris orbits on the globe for context, highest ranked first. 0 = hidden.")
@@ -144,8 +146,8 @@ with tab_watch:
         return frame.sort_values("decay_days", na_position="last")  # soonest estimated re-entry
 
     sats = scored[scored["source"] == "active"]  # the watchlist covers active satellites only, not debris
-    ranked = sort_by_mode(sats)
-    top = ranked.head(int(n_show))
+    # always the WATCHLIST_SIZE highest-risk satellites; the order option only re-sorts them
+    top = sort_by_mode(sats.sort_values("risk", ascending=False).head(WATCHLIST_SIZE))
 
     levels = decay.traffic_light(sats["risk"]).loc[top.index]  # level = risk rank among the satellites, whatever is listed
     LEVEL_LABEL = {"red": "🔴 High", "yellow": "🟡 Medium", "green": "🟢 Low"}
@@ -161,7 +163,7 @@ with tab_watch:
         "Risk score": top["risk"],
     })
     table_ids = tuple(int(i) for i in top["NORAD_CAT_ID"])
-    debris_ranked = sort_by_mode(scored[scored["source"] == "debris"])
+    debris_ranked = scored[scored["source"] == "debris"].sort_values("risk", ascending=False)
     deb_ids = tuple(int(i) for i in debris_ranked["NORAD_CAT_ID"])[:int(n_deb_show)]  # debris only appears as globe orbits
     tier_idx = tuple({"red": 0, "yellow": 1, "green": 2}[l] for l in levels)
     components.html(globe.orbit_html(watchlist_paths(table_ids, tier_idx, tuple(float(r) for r in top["risk"])),
@@ -419,7 +421,7 @@ with st.expander("How these numbers are computed"):
         "(within 6 h = 1, 24 h or more = 0); the last two only count when the miss is under 25 km. Close-approach results are precomputed "
         "for the highest-risk objects.\n"
         "- **Colour levels:** by risk rank among the active satellites: the 10 highest-risk are red, the next 30 yellow, all others green "
-        "(so 50 listed satellites show 10 / 30 / 10, and a list of 10 is all red). Debris is not on the watchlist; it can be drawn on the globe.\n"
+        "(the watchlist always lists the 50 highest-risk satellites, so it shows 10 / 30 / 10). Debris is not on the watchlist; it can be drawn on the globe.\n"
         "- **Footprint:** latitude band ±min(i, 180−i); time per latitude from sin φ = sin i · sin u.\n"
         "- **Conjunctions:** coarse-grid SGP4 screening with 0.5 s refinement of local minima, against every satellite and debris fragment.\n"
         "- **Debris:** the debris groups (TLE or CelesTrak JSON files in data/debris) are parsed into the same record format. They are not on the watchlist "
