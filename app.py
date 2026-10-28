@@ -461,6 +461,11 @@ st.markdown(
         background-color: transparent !important; border: 0 !important; box-shadow: none !important; }
     .st-key-ai_fab button > * { display: none; }
     .st-key-ai_fab { touch-action: none; cursor: grab; }
+    /* tooltip drawn in CSS (a native title tooltip is slow and unreliable); hidden while the popup is open */
+    .st-key-ai_fab:hover::after { content: "Ask Orbisk AI"; position: absolute; top: calc(100% + 4px); right: 0; white-space: nowrap;
+        padding: 4px 10px; border-radius: 6px; font-size: .85rem; line-height: 1.3; pointer-events: none;
+        background: #0a0e1f; color: #f2f5fb; box-shadow: 0 2px 8px rgba(0,0,0,.35); }
+    .st-key-ai_fab:has(button[aria-expanded="true"]):hover::after { display: none; }
     /* tables are read-only: hide the cell pop-up box that would otherwise linger while a clicked row opens the tracker */
     [class*="gdg-"]:has(> .gdg-clip-region) { display: none !important; }
     /* one size scale: headings 1.35rem, numbers 1.5rem, labels and card detail 0.85-0.9rem */
@@ -617,7 +622,7 @@ if (!P.__orbiskDrag) {
   D.head.appendChild(style);
   const nameButton = () => {
     const b = D.querySelector(".st-key-ai_fab button");
-    if (b && b.title !== "Ask Orbisk AI") { b.title = "Ask Orbisk AI"; b.setAttribute("aria-label", "Ask Orbisk AI"); }
+    if (b && b.getAttribute("aria-label") !== "Ask Orbisk AI") b.setAttribute("aria-label", "Ask Orbisk AI");
   };
   nameButton();
   new MutationObserver(nameButton).observe(D.body, {childList: true, subtree: true});
