@@ -73,7 +73,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-tab_watch, tab_track, tab_triage = st.tabs(["Watchlist", "Re-entry Tracker", "Conjunctions & Triage"])
+tab_watch, tab_track, tab_triage = st.tabs(["🛰️ Watchlist", "📉 Re-entry Tracker", "⚠️ Conjunctions & Triage"])
 
 
 @st.cache_data(ttl=300)
@@ -284,7 +284,7 @@ with tab_track:
         # ---- summary card (below the globe)
         with st.container(border=True):
             h1, h2 = st.columns([4, 1])
-            h1.markdown(f"### {name}")
+            h1.markdown(f"#### {name}")
             h1.caption(f"NORAD ID {int(norad)} · {row['type'].capitalize()}")
             h2.badge({"red": "High risk", "yellow": "Medium risk", "green": "Low risk"}[level],
                      color={"red": "red", "yellow": "orange", "green": "green"}[level])
@@ -441,9 +441,9 @@ with tab_triage:
                 with card_cols[k % 3]:
                     with st.container(border=True, key=f"pass_card_{k}"):  # native bordered panel: follows the theme's border colour
                         st.markdown(
-                            f'**{html.escape(str(r.name))}**  \n<span style="font-size:.8rem;opacity:.7">NORAD {int(r.norad_id)}</span>'
-                            f'<div style="font-size:1.6rem;font-weight:600;color:{band[1]}">{r.miss_km:.2f} km</div>'
-                            f'<span style="font-size:.8rem">{band[0]} · {fmt_utc(r.tca_jd)} UTC · {r.rel_speed_km_s:.1f} km/s</span>',
+                            f'**{html.escape(str(r.name))}**  \n<span style="font-size:.85rem;opacity:.7">NORAD {int(r.norad_id)}</span>'
+                            f'<div style="font-size:1.5rem;font-weight:600;color:{band[1]}">{r.miss_km:.2f} km</div>'
+                            f'<span style="font-size:.85rem">{band[0]} · {fmt_utc(r.tca_jd)} UTC · {r.rel_speed_km_s:.1f} km/s</span>',
                             unsafe_allow_html=True)
             st.markdown("<style>" + "".join(stripes) + "</style>", unsafe_allow_html=True)
             if len(ev) > len(closest):
@@ -465,6 +465,11 @@ st.markdown(
         background: url(__ICON__) center / cover no-repeat; box-shadow: 0 2px 10px rgba(0,0,0,.35); }
     .st-key-ai_fab button > * { display: none; }
     .st-key-ai_fab { touch-action: none; cursor: grab; }
+    /* one size scale: headings 1.35rem, numbers 1.5rem, labels and card detail 0.85-0.9rem */
+    h3 { font-size: 1.35rem !important; }
+    h4 { font-size: 1.2rem !important; }
+    [data-testid="stMetricValue"] { font-size: 1.5rem !important; }
+    [data-testid="stMetricLabel"] p { font-size: .9rem !important; }
     /* loading indicator: Streamlit's running man becomes a small planet with a moving orbit */
     [data-testid="stStatusWidgetRunningIcon"] { position: relative; width: 1.6rem; height: 1.6rem; }
     [data-testid="stStatusWidgetRunningIcon"] svg { display: none; }
@@ -479,7 +484,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 with st.container(key="ai_fab"):
-    with st.popover("Ask the Orbisk assistant"):
+    with st.popover("Ask Orbisk AI"):
         st.caption("Optional. The app is fully offline without this. When you add an Anthropic API key the assistant can "
                    "explain results in plain language. It never calculates orbits: it only sees numbers this app computed, "
                    "or looks data up through the app's own functions.")
@@ -612,6 +617,12 @@ if (!P.__orbiskDrag) {
   P.__orbiskDrag = true;
   const style = D.createElement("style");
   D.head.appendChild(style);
+  const nameButton = () => {
+    const b = D.querySelector(".st-key-ai_fab button");
+    if (b && b.title !== "Ask Orbisk AI") { b.title = "Ask Orbisk AI"; b.setAttribute("aria-label", "Ask Orbisk AI"); }
+  };
+  nameButton();
+  new MutationObserver(nameButton).observe(D.body, {childList: true, subtree: true});
   const apply = (x, y) => {
     const w = 56, h = 56;
     x = Math.min(Math.max(0, x), P.innerWidth - w); y = Math.min(Math.max(0, y), P.innerHeight - h);
@@ -673,7 +684,7 @@ if switch_target:  # jump to the chosen tab (Streamlit has no API for this, so c
       const busy = D.querySelector('[data-testid="stStatusWidget"]');
       if (!busy || tries > 150) {
         clearInterval(go);
-        for (const t of D.querySelectorAll('[role="tab"]')) { if (t.textContent.trim() === "__TARGET__") { t.click(); break; } }
+        for (const t of D.querySelectorAll('[role="tab"]')) { if (t.textContent.includes("__TARGET__")) { t.click(); break; } }
       }
     }, 100);
     </script>""".replace("__TARGET__", switch_target), height=0)
