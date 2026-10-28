@@ -16,7 +16,6 @@ import globe
 import history
 import llm
 import orbits
-import snapshot
 import triage
 
 st.set_page_config(page_title="Re-Entry & Debris Mitigation Assistant", layout="wide")
@@ -44,14 +43,6 @@ hist_all = get_history()
 components_df = decay.risk_components(df)
 
 st.title("Re-Entry & Debris Mitigation Assistant")
-health = snapshot.health(df)
-with st.expander("Data sets and snapshot consistency"):
-    st.dataframe(pd.DataFrame({
-        "Data set": health["table"]["set"], "Objects": health["table"]["objects"],
-        "Newest element epoch": health["table"]["newest"].dt.strftime("%Y-%m-%d %H:%M"),
-        "Median age vs newest (days)": health["table"]["median_age_days"].round(1)}), width="stretch", hide_index=True)
-    st.caption("Position error grows with the age of an element set, so all sets should come from one download. "
-               "`python tools/refresh_data.py` fetches the active catalogue and every debris group at once.")
 
 tab_watch, tab_track, tab_triage = st.tabs(["Watchlist", "Re-entry Tracker", "Conjunctions & Triage"])
 
