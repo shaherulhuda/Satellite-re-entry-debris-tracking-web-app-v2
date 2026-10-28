@@ -94,7 +94,7 @@ _JS = """
   const DEB = D.deb || null;             // optional debris layer (lines + moving dots), can be switched off
   let showDeb = !!DEB, forceDebLines = true, lastDebLines = -1e9;
   if (DEB) { const tr = gd.data[DEB.lineIdx]; DEB.X = tr.x; DEB.Y = tr.y; DEB.Z = tr.z; }
-  let s = 0, playing = D.autoplay !== false, speed = 300, spin = D.spin, last = null, phi = Math.atan2(D.eye[1], D.eye[0]);
+  let s = 0, playing = D.autoplay !== false, speed = 60, spin = D.spin, last = null, phi = Math.atan2(D.eye[1], D.eye[0]);
   const rad = Math.hypot(D.eye[0], D.eye[1]), ez = D.eye[2];
 
   // controls
@@ -102,7 +102,7 @@ _JS = """
   bar.style.cssText = 'position:absolute;top:8px;left:8px;z-index:10;display:flex;gap:8px;align-items:center;' +
     'font:13px sans-serif;color:#dde6f5;background:rgba(10,18,34,.75);padding:6px 10px;border-radius:6px';
   bar.innerHTML = '<button id="pp" style="padding:4px 12px;cursor:pointer">' + (playing ? '⏸ Pause' : '▶ Play') + '</button>' +
-    '<label>Speed <select id="sp"><option value="60">60×</option><option value="300" selected>300×</option>' +
+    '<label>Speed <select id="sp"><option value="60" selected>60×</option><option value="300">300×</option>' +
     '<option value="1000">1000×</option></select></label>' +
     '<label><input type="checkbox" id="rot"' + (spin ? ' checked' : '') + '> Rotate view</label>' +
     (DEB ? '<label><input type="checkbox" id="deb" checked> Debris orbits (' + DEB.count + ')</label>' : '') +
@@ -193,11 +193,11 @@ def _int_or_null(a):
 
 
 def orbit_html(paths: list[dict], height: int = 650, highlight: bool = False, spin: bool = True,
-               debris: list[dict] | None = None, events: list[dict] | None = None, autoplay: bool = True) -> str:
+               debris: list[dict] | None = None, events: list[dict] | None = None, autoplay: bool = False) -> str:
     """paths: dicts with name, x, y, z (one period, Earth-fixed-at-start km), period_s, optional hover and
     optional `tier` (0 red, 1 yellow, 2 green, 3 cyan; colours every orbit and dot when all paths have one).
 
-    `autoplay=False` starts the animation paused at time zero (the start time of the paths, e.g. now).
+    The animation starts paused at time zero (the start time of the paths, e.g. now) at 60x; `autoplay=True` starts it playing.
 
     `events` marks conjunction points: dicts with x, y, z (km, same axes as the paths), `tier` and `hover`.
 

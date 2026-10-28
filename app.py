@@ -161,7 +161,7 @@ with tab_watch:
                                       "Soonest estimated re-entry"],
                             help="The watchlist draws on the 50 highest-risk active satellites; this orders them and the first "
                                  "'Objects' of that order are shown.")
-    n_show = c_n.number_input("Objects", 10, WATCHLIST_SIZE, WATCHLIST_SIZE, step=10,
+    n_show = c_n.number_input("Objects", 10, WATCHLIST_SIZE, 10, step=10,
                               help="How many to show: the first N of the 50 highest-risk satellites in the chosen order.")
     n_deb_total = int((df["source"] == "debris").sum())
     show_debris = st.toggle("Show debris orbits on globe", value=False,
@@ -279,7 +279,7 @@ with tab_track:
             c4.metric("Perigee / Apogee", f"{row['perigee_km']:.0f} / {row['apogee_km']:.0f} km")
             path = orbits.orbit_path_xyz(record, n_points=360)
             path["name"] = name
-            components.html(globe.orbit_html([path], height=600, highlight=True, autoplay=False), height=610)  # paused at "now": matches the ground track
+            components.html(globe.orbit_html([path], height=600, highlight=True), height=610)  # starts paused at "now": matches the ground track
 
         # ---- summary card (below the globe)
         with st.container(border=True):

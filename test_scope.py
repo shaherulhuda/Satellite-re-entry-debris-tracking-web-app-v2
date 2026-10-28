@@ -158,3 +158,11 @@ def test_triage_shows_intro_then_cards_table_and_csv():
     assert stripes and stripes[0].count("border-left: 6px solid") <= 6
     assert all("rgba(128,128,128" not in m.value for m in at.markdown if "NORAD" in m.value or "pass_card" in m.value)  # panels are native, no hard-coded grey
     assert at.button(key="FormSubmitter:tri_asset_form-Run screening").proto.type == "primary"
+
+
+def test_app_starts_with_ten_satellites():
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file("app.py", default_timeout=400).run()
+    assert not at.exception
+    assert next(n for n in at.number_input if n.label == "Objects").value == 10
+    assert len(at.dataframe[0].value) == 10
