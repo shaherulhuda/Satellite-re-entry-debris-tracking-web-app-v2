@@ -93,3 +93,20 @@ def test_suggested_action_rules():
     assert f("green", None, None, 12)["level"] == "prepare"
     assert f("red", None, None, float("nan"))["level"] == "prepare"
     assert f("green", None, None, 900)["level"] == "monitor"
+
+
+def test_object_page_card_subtabs_and_screen_button():
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file("app.py", default_timeout=400).run()
+    assert not at.exception
+    assert [t.label for t in at.tabs if t.label in ("Orbit", "Decay", "Footprint", "Risk breakdown")] == \
+        ["Orbit", "Decay", "Footprint", "Risk breakdown"]
+    assert any(m.label == "Risk score" for m in at.metric)  # summary card
+    pick = at.selectbox(key="tracker_obj")
+    target = pick.options[3]  # option strings look like "NAME (12345)"
+    pick.select_index(3).run()
+    assert not at.exception
+    at.button(key="screen_this").click().run()
+    assert not at.exception
+    assert str(at.session_state["tri_obj"]) == re.search(r"\((\d+)\)$", target).group(1)
+    assert str(at.selectbox(key="tri_obj").value) == re.search(r"\((\d+)\)$", target).group(1)

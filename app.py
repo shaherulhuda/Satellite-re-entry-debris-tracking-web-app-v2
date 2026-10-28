@@ -232,9 +232,9 @@ with tab_watch:
     # selecting a row opens that object in the Re-entry Tracker (set once per new selection so the picker stays usable)
     picked = event.selection.rows
     picked_id = table_ids[picked[0]] if picked and picked[0] < len(table_ids) else None
-    switch_tab = picked_id is not None and picked_id != st.session_state.get("_watch_picked")
+    switch_target = "Re-entry Tracker" if picked_id is not None and picked_id != st.session_state.get("_watch_picked") else None
     st.session_state["_watch_picked"] = picked_id
-    if switch_tab:
+    if switch_target:
         st.session_state["tracker_obj"] = picked_id
     if ca_meta is None or not top["ca_screened"].all():
         st.caption("Close-approach columns are filled for the highest-risk objects only (`tools/compute_conjunctions.py`); "
@@ -246,52 +246,82 @@ with tab_track:
     ids = sats.sort_values("risk", ascending=False).head(WATCHLIST_SIZE)["NORAD_CAT_ID"].astype(int).tolist()
     default = 0
     norad = st.selectbox("Object", ids, format_func=label, key="tracker_obj")
-    row = df[df["NORAD_CAT_ID"] == norad].iloc[0]
+    row = sats[sats["NORAD_CAT_ID"] == norad].iloc[0]
     record = records[int(norad)]
     name = record["OBJECT_NAME"]
+    level = decay.traffic_light(sats["risk"]).loc[row.name]
+    comp_row = components_df.loc[row.name]
 
-    try:
-        pos = orbits.current_position(record)
-        track = orbits.ground_track(record, n_orbits=3)
-    except Exception as exc:  # e.g. decayed / bad elements
-        st.error(f"Could not propagate {name}: {exc}")
-    else:
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Latitude", f"{pos['lat']:.2f}°")
-        c2.metric("Longitude", f"{pos['lon']:.2f}°")
-        c3.metric("Altitude", f"{pos['alt_km']:.0f} km")
-        c4.metric("Perigee / Apogee", f"{row['perigee_km']:.0f} / {row['apogee_km']:.0f} km")
-        path = orbits.orbit_path_xyz(record, n_points=360)
-        path["name"] = name
-        components.html(globe.orbit_html([path], height=600, highlight=True), height=610)
+    # ---- summary card
+    with st.container(border=True):
+        h1, h2 = st.columns([4, 1])
+        h1.markdown(f"### {name}")
+        h1.caption(f"NORAD ID {int(norad)} · {row['type'].capitalize()}")
+        h2.badge({"red": "High risk", "yellow": "Medium risk", "green": "Low risk"}[level],
+                 color={"red": "red", "yellow": "orange", "green": "green"}[level])
+        s1, s2, s3, s4 = st.columns(4)
+        s1.metric("Risk score", f"{row['risk']:.0f} / 100")
+        s2.metric("Est. time to re-entry", decay.format_days(row["decay_days"]))
+        s3.metric("Rough range", decay.format_range(row["decay_days_low"], row["decay_days_high"]))
+        if bool(row.get("ca_screened", False)) and pd.notna(row.get("ca_miss_km")):
+            s4.metric("Closest approach", f"{row['ca_miss_km']:.2f} km",
+                      help=f"With {row['ca_with']}, {row['ca_hours']:.1f} h after the snapshot, at {row['ca_speed_km_s']:.1f} km/s.")
+        else:
+            s4.metric("Closest approach", "—", help="Not screened, or no approach inside the threshold.")
+        if st.button("Screen this object", key="screen_this", type="primary",
+                     help="Opens Conjunctions & Triage with this object selected."):
+            st.session_state["tri_obj"] = int(norad)
+            switch_target = "Conjunctions & Triage"
 
-        st.markdown("**Ground track** (next 3 orbits)")
-        st.plotly_chart(globe.ground_track_figure(track, pos), width="stretch")
+    t_orbit, t_decay, t_foot, t_risk_bd = st.tabs(["Orbit", "Decay", "Footprint", "Risk breakdown"])
 
-    # ---- decay estimate and history
-    st.subheader("Decay estimate")
-    h0 = float(decay.mean_altitude_km(row["MEAN_MOTION"]))
-    d1, d2, d3, d4 = st.columns(4)
-    d1.metric("Est. time to re-entry", decay.format_days(row["decay_days"]))
-    d2.metric("Rough range", decay.format_range(row["decay_days_low"], row["decay_days_high"]))
-    d3.metric("Current decay rate", f"{row['decay_km_day']:.3f} km/day" if np.isfinite(row["decay_km_day"]) else "—")
-    h_obj = history.object_history(hist_all, int(norad))
-    obs = history.observed_decay_rate(h_obj)
-    d4.metric("Observed perigee trend", f"{obs:+.3f} km/day" if obs is not None else "n/a",
-              help="Needs at least two recorded snapshots spanning a day or more.")
-    st.caption(f"Status: **{row['decay_status']}**. This is a rough estimate (typically good to a factor of 2 or worse), "
-               "not a re-entry prediction; it cannot anticipate solar activity changes or manoeuvres.")
-    st.plotly_chart(charts.decay_figure(h0, float(row["decay_km_day"]), h_obj), width="stretch")
+    with t_orbit:
+        try:
+            pos = orbits.current_position(record)
+            track = orbits.ground_track(record, n_orbits=3)
+        except Exception as exc:  # e.g. decayed / bad elements
+            st.error(f"Could not propagate {name}: {exc}")
+        else:
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Latitude", f"{pos['lat']:.2f}°")
+            c2.metric("Longitude", f"{pos['lon']:.2f}°")
+            c3.metric("Altitude", f"{pos['alt_km']:.0f} km")
+            c4.metric("Perigee / Apogee", f"{row['perigee_km']:.0f} / {row['apogee_km']:.0f} km")
+            path = orbits.orbit_path_xyz(record, n_points=360)
+            path["name"] = name
+            components.html(globe.orbit_html([path], height=600, highlight=True), height=610)
 
-    # ---- footprint
-    st.subheader("Re-entry ground footprint")
-    f1, f2 = st.columns(2)
-    f1.metric("Latitudes overflown", f"±{footprint.max_latitude(row['INCLINATION']):.1f}°")
-    f2.metric("Share of Earth's surface", f"{footprint.surface_fraction(row['INCLINATION']) * 100:.0f}%")
-    st.plotly_chart(charts.footprint_figure(float(row["INCLINATION"])), width="stretch")
-    st.caption("An object can only come down within the latitude band set by its inclination (red), and spends most of its time "
-               "near the band's edges (right). Where it actually re-enters depends on the final orbits and cannot be "
-               "predicted days ahead; this shows where it *can* pass, not where it *will* land.")
+            st.markdown("**Ground track** (next 3 orbits)")
+            st.plotly_chart(globe.ground_track_figure(track, pos), width="stretch")
+
+    with t_decay:
+        h0 = float(decay.mean_altitude_km(row["MEAN_MOTION"]))
+        d1, d2, d3, d4 = st.columns(4)
+        d1.metric("Est. time to re-entry", decay.format_days(row["decay_days"]))
+        d2.metric("Rough range", decay.format_range(row["decay_days_low"], row["decay_days_high"]))
+        d3.metric("Current decay rate", f"{row['decay_km_day']:.3f} km/day" if np.isfinite(row["decay_km_day"]) else "—")
+        h_obj = history.object_history(hist_all, int(norad))
+        obs = history.observed_decay_rate(h_obj)
+        d4.metric("Observed perigee trend", f"{obs:+.3f} km/day" if obs is not None else "n/a",
+                  help="Needs at least two recorded snapshots spanning a day or more.")
+        st.caption(f"Status: **{row['decay_status']}**. This is a rough estimate (typically good to a factor of 2 or worse), "
+                   "not a re-entry prediction; it cannot anticipate solar activity changes or manoeuvres.")
+        st.plotly_chart(charts.decay_figure(h0, float(row["decay_km_day"]), h_obj), width="stretch")
+
+    with t_foot:
+        f1, f2 = st.columns(2)
+        f1.metric("Latitudes overflown", f"±{footprint.max_latitude(row['INCLINATION']):.1f}°")
+        f2.metric("Share of Earth's surface", f"{footprint.surface_fraction(row['INCLINATION']) * 100:.0f}%")
+        st.plotly_chart(charts.footprint_figure(float(row["INCLINATION"])), width="stretch")
+        st.caption("An object can only come down within the latitude band set by its inclination (red), and spends most of its time "
+                   "near the band's edges (right). Where it actually re-enters depends on the final orbits and cannot be "
+                   "predicted days ahead; this shows where it *can* pass, not where it *will* land.")
+
+    with t_risk_bd:
+        st.metric("Risk score", f"{row['risk']:.1f} / 100")
+        st.plotly_chart(charts.risk_breakdown_figure(comp_row, weights, level), width="stretch")
+        st.caption("Each bar is one weighted term of the score: the grey bar is the most it could add (its weight), the colour bar is "
+                   "what this object gets. The seven terms add up to the risk score.")
 
 # ---------------------------------------------------------------- Triage desk
 fmt_utc = lambda jd: conjunction.jd_to_datetime(jd).strftime("%Y-%m-%d %H:%M:%S")
@@ -321,8 +351,7 @@ with tab_triage:
     asset_ids = ids  # the 50 highest-risk active satellites, same as the watchlist
     with st.form("tri_asset_form"):
         a1, a2, a3 = st.columns([3, 1, 1])
-        asset = a1.selectbox("Object to screen", asset_ids,
-                             index=0, format_func=label)
+        asset = a1.selectbox("Object to screen", asset_ids, format_func=label, key="tri_obj")
         days = a2.slider("Window (days)", 1, 30, 2)
         hours = days * 24
         thr = a3.slider("Report within (km)", 1, 100, 25)
@@ -516,7 +545,7 @@ if (!P.__orbiskDrag) {
 }
 </script>""", height=0)
 
-if switch_tab:  # jump to the Re-entry Tracker tab (Streamlit has no API for this, so click the tab header once the run is done)
+if switch_target:  # jump to the chosen tab (Streamlit has no API for this, so click the tab header once the run is done)
     components.html("""<script>
     const D = window.parent.document;
     let tries = 0;
@@ -525,7 +554,7 @@ if switch_tab:  # jump to the Re-entry Tracker tab (Streamlit has no API for thi
       const busy = D.querySelector('[data-testid="stStatusWidget"]');
       if (!busy || tries > 150) {
         clearInterval(go);
-        for (const t of D.querySelectorAll('[role="tab"]')) { if (t.textContent.trim() === "Re-entry Tracker") { t.click(); break; } }
+        for (const t of D.querySelectorAll('[role="tab"]')) { if (t.textContent.trim() === "__TARGET__") { t.click(); break; } }
       }
     }, 100);
-    </script>""", height=0)
+    </script>""".replace("__TARGET__", switch_target), height=0)
