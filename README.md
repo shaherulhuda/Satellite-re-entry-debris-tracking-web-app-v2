@@ -13,7 +13,7 @@ explains. To check it against your key: `ANTHROPIC_API_KEY=... python tools/chec
 - set `ANTHROPIC_API_KEY` as an environment variable / in `.streamlit/secrets.toml`.
 
 On a public deployment a key from secrets can be used by anyone with the link. Set `ASSISTANT_PASSWORD` to require an
-access code and `ASSISTANT_MAX_REQUESTS` (default 30) to cap requests per session. Never commit a key.
+access code and `ASSISTANT_MAX_REQUESTS` (default 10) to cap questions per session. Never commit a key.
 
 ## Debris data and scope
 

@@ -242,15 +242,18 @@ def ai_status():
     return True, pasted or None, None
 
 
+ASSISTANT_DEFAULT_MAX = 10  # questions per session (one question, briefing or explanation = one request)
+
+
 def ai_guarded(fn):
     """Run one model call with the shared per-session request cap and friendly errors. None on failure."""
     ready, key, msg = ai_status()
     if not ready:
         st.info(msg)
         return None
-    max_req = int(_secret("ASSISTANT_MAX_REQUESTS") or 30)
+    max_req = int(_secret("ASSISTANT_MAX_REQUESTS") or ASSISTANT_DEFAULT_MAX)
     if st.session_state.setdefault("ai_requests", 0) >= max_req:
-        st.error("Session request limit reached. Reload the page to reset it.")
+        st.error(f"You have used all {max_req} assistant questions for this session.")
         return None
     st.session_state["ai_requests"] += 1
     try:
@@ -603,10 +606,10 @@ with st.container(key="ai_fab"):
                     st.warning("This deployment uses a key from its configuration, so anyone with the link can spend it. "
                                "Set `ASSISTANT_PASSWORD` to require an access code.")
             if allowed:
-                max_req = int(_secret("ASSISTANT_MAX_REQUESTS") or 30)
+                max_req = int(_secret("ASSISTANT_MAX_REQUESTS") or ASSISTANT_DEFAULT_MAX)
                 used = st.session_state.setdefault("ai_requests", 0)
                 model = st.selectbox("Model", list(llm.MODELS), format_func=llm.MODELS.get, key="ai_model")
-                st.caption(f"{used}/{max_req} requests used in this session.")
+                st.caption(f"{used}/{max_req} questions used in this session.")
                 ctx = llm.DataContext(df, records, components_df, weights, hist_all)
 
                 guarded = ai_guarded

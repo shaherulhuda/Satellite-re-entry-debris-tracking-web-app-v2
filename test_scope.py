@@ -183,3 +183,20 @@ def test_clicking_a_watchlist_row_offers_two_actions():
     assert top in shown
     at.button(key="pick_screen").click().run()  # (AppTest drops the table selection on this run, so only check it does not break)
     assert not at.exception
+
+
+def test_assistant_allows_ten_questions_per_session(monkeypatch):
+    from streamlit.testing.v1 import AppTest
+    import llm as llm_mod
+    seen = []
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    monkeypatch.setattr(llm_mod, "make_client", lambda key=None: object())
+    monkeypatch.setattr(llm_mod, "chat", lambda c, model, ctx, hist, q: (seen.append(q), ("ok", [], {"input_tokens": 1, "output_tokens": 1}))[1])
+    at = AppTest.from_file("app.py", default_timeout=400)
+    at.session_state["ai_requests"] = 9          # the tenth question is still allowed
+    at.run()
+    assert any("9/10 questions used" in c.value for c in at.caption)
+    at.button(key="ai_suggest_1").click().run()
+    assert len(seen) == 1 and at.session_state["ai_requests"] == 10
+    at.chat_input[0].set_value("one more?").run()  # the eleventh is refused and never reaches the model
+    assert len(seen) == 1 and any("used all 10 assistant questions" in e.value for e in at.error)
