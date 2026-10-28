@@ -256,9 +256,8 @@ with tab_track:
     record = records[int(norad)]
     name = record["OBJECT_NAME"]
     level = decay.traffic_light(sats["risk"]).loc[row.name]
-    comp_row = components_df.loc[row.name]
 
-    t_orbit, t_decay, t_foot, t_risk_bd = st.tabs(["Orbit", "Decay", "Re-entry footprint", "Risk breakdown"])
+    t_orbit, t_decay, t_foot = st.tabs(["Orbit", "Decay", "Re-entry footprint"])
 
     try:
         pos = orbits.current_position(record)
@@ -327,12 +326,6 @@ with tab_track:
         st.caption("An object can only come down within the latitude band set by its inclination (red), and spends most of its time "
                    "near the band's edges (right). Where it actually re-enters depends on the final orbits and cannot be "
                    "predicted days ahead; this shows where it *can* pass, not where it *will* land.")
-
-    with t_risk_bd:
-        st.metric("Risk score", f"{row['risk']:.1f} / 100")
-        st.plotly_chart(charts.risk_breakdown_figure(comp_row, weights, level), width="stretch")
-        st.caption("Each bar is one weighted term of the score: the grey bar is the most it could add (its weight), the colour bar is "
-                   "what this object gets. The seven terms add up to the risk score.")
 
 # ---------------------------------------------------------------- Triage desk
 fmt_utc = lambda jd: conjunction.jd_to_datetime(jd).strftime("%Y-%m-%d %H:%M:%S")

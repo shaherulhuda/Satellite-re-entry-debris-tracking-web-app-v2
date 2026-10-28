@@ -49,28 +49,3 @@ def footprint_figure(inclination_deg: float, height: int = 430):
     fig.update_yaxes(range=[-90, 90], dtick=30, row=1, col=2)
     fig.update_layout(height=height, margin=dict(l=0, r=0, t=10, b=0), bargap=0.05)
     return fig
-
-
-RISK_TERM_LABELS = {"perigee": "Perigee", "decay": "Decay time", "inclination": "Inclination", "type": "Object type",
-                    "miss": "Miss distance", "speed": "Relative speed", "time": "Time to closest approach"}
-RISK_LEVEL_COLORS = {"red": "#e5484d", "yellow": "#e0a800", "green": "#30a46c"}
-
-
-def risk_breakdown_figure(components_row, weights: dict, level: str = "green", height: int = 360):
-    """Horizontal bars: each term's points (weight x 0-1 value x 100) against the most it could add (its weight)."""
-    total = sum(weights.values()) or 1.0
-    keys = list(decay.COMPONENT_OF)
-    maxima = [100.0 * weights[k] / total for k in keys]
-    points = [maxima[i] * float(components_row[decay.COMPONENT_OF[k]]) for i, k in enumerate(keys)]
-    labels = [RISK_TERM_LABELS[k] for k in keys]
-    fig = go.Figure()
-    fig.add_trace(go.Bar(y=labels, x=maxima, orientation="h", name="Most it could add", marker=dict(color="rgba(128,128,128,0.25)"),
-                         hoverinfo="skip"))
-    fig.add_trace(go.Bar(y=labels, x=points, orientation="h", name="Points this object gets",
-                         marker=dict(color=RISK_LEVEL_COLORS.get(level, "#30a46c")),
-                         text=[f"{p:.1f} / {m:.0f}" for p, m in zip(points, maxima)], textposition="outside", cliponaxis=False,
-                         hovertemplate="%{y}: %{x:.1f} points<extra></extra>"))
-    fig.update_layout(barmode="overlay", height=height, margin=dict(l=0, r=60, t=10, b=0), yaxis=dict(autorange="reversed"),
-                      xaxis=dict(title="Risk points (total = risk score)", range=[0, max(maxima) * 1.25]),
-                      legend=dict(orientation="h", y=-0.2))
-    return fig
