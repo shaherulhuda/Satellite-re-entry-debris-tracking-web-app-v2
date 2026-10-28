@@ -246,3 +246,23 @@ def test_cover_page_comes_first_and_enter_opens_the_watchlist():
     assert at.segmented_control(key="section").value == "🛰️ Watchlist" and len(at.dataframe) == 1
     assert not any("Which satellites are coming down" in m.value for m in at.markdown)
     assert any("orbisk-header" in m.value for m in at.markdown)  # the normal header replaces the cover
+
+
+def test_no_stray_values_are_printed_when_sections_are_revisited():
+    """Streamlit prints bare expressions; going Tracker -> Watchlist -> Tracker used to show '`None` `None` `None`'."""
+    def markdown_in(node):
+        found = []
+        for child in getattr(node, "children", {}).values():
+            if getattr(child, "type", "") == "markdown":
+                found.append(child.value)
+            found += markdown_in(child)
+        return found
+
+    at = open_app(400)
+    at.session_state["section"] = SEC_TRACK
+    at.run()
+    at.segmented_control(key="section").set_value("🛰️ Watchlist").run()
+    at.segmented_control(key="section").set_value(SEC_TRACK).run()
+    assert not at.exception
+    stray = [v for v in markdown_in(at.main) if "`None`" in v]
+    assert not stray, stray

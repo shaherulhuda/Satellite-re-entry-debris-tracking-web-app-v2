@@ -394,7 +394,8 @@ def sticky(widget, key: str, *args, **kwargs):
     mem = st.session_state.setdefault("_mem", {})
     if key not in st.session_state and key in mem:
         st.session_state[key] = mem[key]
-        kwargs.pop("value", None), kwargs.pop("index", None), kwargs.pop("default", None)  # the remembered value wins
+        for stale in ("value", "index", "default"):  # the remembered value wins
+            kwargs.pop(stale, None)
     value = widget(*args, key=key, **kwargs)
     mem[key] = value
     return value
