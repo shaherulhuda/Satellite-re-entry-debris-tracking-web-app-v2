@@ -129,7 +129,7 @@ with tab_watch:
                         horizontal=True)
     n_show = c_n.number_input("Objects", 10, 200, 50, step=10)
     n_deb_total = int((df["source"] == "debris").sum())
-    n_deb_show = c_d.number_input("Debris orbits", 0, n_deb_total, 0, step=50,
+    n_deb_show = c_d.number_input("Debris", 0, n_deb_total, 0, step=50,
                                   help="How many debris orbits to draw on the globe, highest ranked first. 0 = hidden.")
 
     with st.expander("Risk score: formula and weights"):
