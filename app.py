@@ -309,10 +309,8 @@ with tab_triage:
         m1.metric("Objects in a similar altitude band", f"{res['n']:,}")
         m2.metric(f"Passes within {res['thr']} km", f"{len(ev)}")
         m3.metric("Closest pass", f"{ev['miss_km'].min():.1f} km" if len(ev) else "none")
-        st.caption(f"{records[res['asset']]['OBJECT_NAME']} · window from {res['start']} UTC for {res['hours'] / 24:g} days. "
-                   "Objects holding within ~20 km of each other the whole window (docked/formation) are ignored."
-                   + (f" The object's orbit ends after {res['hours'] / 24:.1f} days, so only that part was screened."
-                      if res["hours"] < res["asked"] - 1 else ""))
+        if res["hours"] < res["asked"] - 1:  # only shown when the screened object's orbit ends inside the window
+            st.caption(f"This object's orbit ends after {res['hours'] / 24:.1f} days, so only that part was screened.")
         if not len(ev):
             st.success("No close approaches against any catalogue object inside the threshold in this window.")
         else:
