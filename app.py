@@ -126,7 +126,7 @@ def start_time(mode: str):
 with tab_watch:
     st.subheader("Watchlist")
     c_mode, c_n, c_d = st.columns([3, 1, 1])
-    mode = c_mode.radio("Rank by", ["Risk score (highest first)", "Soonest estimated re-entry", "Lowest perigee"],
+    mode = c_mode.radio("Rank by", ["Risk score (highest first)", "Soonest estimated re-entry"],
                         horizontal=True)
     n_show = c_n.number_input("Objects", 10, 200, 50, step=10)
     n_deb_total = int((df["source"] == "debris").sum())
@@ -141,9 +141,7 @@ with tab_watch:
     def sort_by_mode(frame: pd.DataFrame) -> pd.DataFrame:
         if mode.startswith("Risk"):
             return frame.sort_values("risk", ascending=False)
-        if mode.startswith("Soonest"):
-            return frame.sort_values("decay_days", na_position="last")
-        return frame.sort_values("perigee_km")
+        return frame.sort_values("decay_days", na_position="last")  # soonest estimated re-entry
 
     sats = scored[scored["source"] == "active"]  # the watchlist covers active satellites only, not debris
     ranked = sort_by_mode(sats)
