@@ -8,6 +8,8 @@ from pathlib import Path
 import streamlit as st
 
 ASSETS = Path(__file__).parent / "assets"
+TEAM = ["shaherulhuda"]  # names shown in the footer: add teammates here
+REPO_URL = "https://github.com/shaherulhuda/Satellite-re-entry-debris-tracking-web-app-v2"
 
 
 def _data_uri(name: str) -> str:
@@ -123,6 +125,12 @@ h4 { font-size: 1.2rem !important; }
     border: 1.5px solid rgba(79, 209, 224, .55); box-sizing: border-box; animation: orbisk-orbit 1.2s linear infinite;
     background: radial-gradient(circle at 50% 0, #FF7A3D 0 2.6px, transparent 3.2px); }
 @keyframes orbisk-orbit { to { transform: rotate(360deg); } }
+
+/* footer */
+.orbisk-footer { margin: 2.2rem 0 .6rem; padding-top: 1rem; border-top: 1px solid rgba(120, 200, 255, .18); text-align: center;
+    font-size: .85rem; color: rgba(232, 238, 252, .6); }
+.orbisk-footer a { color: #4FD1E0; text-decoration: none; }
+.orbisk-footer a:hover { text-decoration: underline; }
 
 /* cover page: shown first, until "Enter Watchlist" is pressed */
 .orbisk-cover { max-width: 1080px; margin: 0 auto; padding-top: .4rem; }
@@ -427,8 +435,8 @@ section = st.segmented_control("Section", [SEC_WATCH, SEC_TRACK, SEC_TRIAGE], ke
 # ---------------------------------------------------------------- Watchlist
 @st.fragment
 def watchlist_view():
-    st.subheader("Watchlist")
-    c_mode, c_n = st.columns([3, 1])
+    c_mode, c_n, c_dl = st.columns([3, 1, 1], vertical_alignment="bottom")
+    dl_slot = c_dl.empty()  # the CSV button lives here, top-right next to the controls; it is filled once the table exists
     mode = sticky(c_mode.selectbox, "w_mode", "Rank by", ["Risk score: highest first", "Risk score: lowest first",
                                                           "Soonest estimated re-entry"],
                   help="The watchlist draws on the 50 highest-risk active satellites; this orders them and the first "
@@ -512,10 +520,10 @@ def watchlist_view():
                 go_to(SEC_TRACK, obj=picked_id, view=VIEW_FOOT)
             else:
                 go_to(SEC_TRIAGE, obj=picked_id, auto=True)
-    st.download_button("Download CSV", data=table.assign(**{"NORAD ID": top["NORAD_CAT_ID"].astype(int)})
-                       .assign(Level=levels.map({"red": "High", "yellow": "Medium", "green": "Low"}))
-                       .to_csv(index=False).encode("utf-8"),
-                       file_name="orbisk_watchlist.csv", mime="text/csv")
+    dl_slot.download_button("Download CSV", data=table.assign(**{"NORAD ID": top["NORAD_CAT_ID"].astype(int)})
+                            .assign(Level=levels.map({"red": "High", "yellow": "Medium", "green": "Low"}))
+                            .to_csv(index=False).encode("utf-8"),
+                            file_name="orbisk_watchlist.csv", mime="text/csv", width="stretch")
     if ca_meta is None or not top["ca_screened"].all():
         st.caption("Close-approach columns are filled for the highest-risk objects only (`tools/compute_conjunctions.py`); "
                    "— means not screened or no approach within the threshold.")
@@ -864,6 +872,13 @@ with st.expander("How these numbers are computed"):
         "- **Limits:** one element set per object (no history until snapshots are added), mean elements are only km-accurate, "
         "and active satellites that manoeuvre invalidate drag-based decay estimates."
     )
+
+# footer under every section
+st.markdown(
+    '<div class="orbisk-footer">Built by <b>' + html.escape(", ".join(TEAM)) + f'</b> &nbsp;·&nbsp; <a href="{REPO_URL}" target="_blank" rel="noopener">GitHub</a>'
+    ' &nbsp;·&nbsp; Orbit data: CelesTrak</div>',
+    unsafe_allow_html=True,
+)
 
 # make the launcher draggable: script runs in a same-origin iframe and drives the parent page; the position is kept in
 # a <style> tag in the parent head (survives Streamlit re-renders) and in localStorage

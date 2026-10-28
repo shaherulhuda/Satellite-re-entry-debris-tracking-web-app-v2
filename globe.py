@@ -121,15 +121,29 @@ _JS = """
   const rad = Math.hypot(D.eye[0], D.eye[1]), ez = D.eye[2];
 
   // controls
+  const sheet = document.createElement('style');
+  sheet.textContent = '#ctl{font:13px "Source Sans Pro",Arial,sans-serif;color:#dde6f5;background:rgba(12,20,44,.72);' +
+    'border:1px solid rgba(120,200,255,.2);backdrop-filter:blur(8px);padding:5px 8px;border-radius:999px;gap:10px}' +
+    '#ctl button,#ctl select{font:inherit;color:#e8eefc;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);' +
+    'border-radius:999px;padding:4px 14px;cursor:pointer;transition:background .2s,border-color .2s,box-shadow .2s}' +
+    '#ctl button:hover,#ctl select:hover{background:rgba(79,209,224,.16);border-color:rgba(79,209,224,.55)}' +
+    '#ctl button:focus-visible,#ctl select:focus-visible{outline:none;box-shadow:0 0 0 2px rgba(255,122,61,.6)}' +
+    '#ctl select{appearance:none;-webkit-appearance:none;color-scheme:dark;padding-right:24px;' +
+    'background-image:url("data:image/svg+xml;utf8,<svg xmlns=%27http://www.w3.org/2000/svg%27 width=%2710%27 height=%276%27><path d=%27M0 0l5 6 5-6z%27 fill=%27%23dde6f5%27/></svg>");' +
+    'background-repeat:no-repeat;background-position:right 9px center}' +
+    '#ctl select option{background:#0f1730;color:#e8eefc}' +
+    '#ctl label{display:flex;align-items:center;gap:6px;cursor:pointer}' +
+    '#ctl input[type=checkbox]{accent-color:#2BB5C8;width:14px;height:14px;margin:0}';
+  document.head.appendChild(sheet);
   const bar = document.createElement('div');
-  bar.style.cssText = 'position:absolute;top:8px;left:8px;z-index:10;display:flex;gap:8px;align-items:center;' +
-    'font:13px sans-serif;color:#dde6f5;background:rgba(10,18,34,.75);padding:6px 10px;border-radius:6px';
-  bar.innerHTML = '<button id="pp" style="padding:4px 12px;cursor:pointer">' + (playing ? '⏸ Pause' : '▶ Play') + '</button>' +
+  bar.id = 'ctl';
+  bar.style.cssText = 'position:absolute;top:8px;left:8px;z-index:10;display:flex;align-items:center';
+  bar.innerHTML = '<button id="pp">' + (playing ? '⏸ Pause' : '▶ Play') + '</button>' +
     '<label>Speed <select id="sp"><option value="60" selected>60×</option><option value="300">300×</option>' +
     '<option value="1000">1000×</option></select></label>' +
     '<label><input type="checkbox" id="rot"' + (spin ? ' checked' : '') + '> Rotate view</label>' +
     (DEB ? '<label><input type="checkbox" id="deb" checked> Debris orbits (' + DEB.count + ')</label>' : '') +
-    '<span id="clk" style="min-width:86px"></span>';
+    '<span id="clk" style="min-width:60px;opacity:.8"></span>';
   document.body.appendChild(bar);
   const pp = bar.querySelector('#pp'), sel = bar.querySelector('#sp'), rot = bar.querySelector('#rot'),
         clk = bar.querySelector('#clk');
