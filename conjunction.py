@@ -9,8 +9,9 @@ Method (fast enough for windows of many days):
   2. propagate the primary and the candidates with SGP4 every `step_s` seconds, keeping positions AND velocities;
   3. a distance minimum lies where the relative position r and velocity v satisfy r.v = 0, so a sign change of
      r.v from negative to positive between two samples marks one minimum (no fine time grid needed);
-  4. between samples the relative motion is a cubic Hermite curve (error of a few metres at 120 s), so the minimum
-     inside the step is found on 17 interpolated points; only minima closer than the threshold go on;
+  4. between samples the relative motion is a cubic Hermite curve (error of a few metres at 120 s); the minimum
+     inside the step is located by a coarse scan plus a golden-section search on that curve, and only minima
+     closer than the threshold go on;
   5. those few are refined with exact SGP4 on a 0.25 s grid;
   6. pairs that stay within a few tens of km for the whole window (docked / flying in formation) are dropped.
 """
@@ -22,7 +23,7 @@ from sgp4 import omm
 from sgp4.api import Satrec, SatrecArray
 
 STEP_S = 120.0       # sampling step; cubic Hermite interpolation keeps the error to metres at this step
-HERMITE_POINTS = 17  # interpolation points per step when locating a minimum
+HERMITE_POINTS = 9   # coarse scan points per step; a golden-section search then polishes the best bracket
 HERMITE_TOL_KM = 1.0  # keep minima this much beyond the threshold, to allow for interpolation error
 FORMATION_KM = 20.0
 
@@ -71,7 +72,7 @@ def screen(primary: dict, catalogue: pd.DataFrame, records_by_norad: dict, start
     bad = np.flatnonzero(ep != 0)
     if bad.size:
         if bad[0] < 3:
-            raise ValueError("primary object could not be propagated over this window")
+            raise ValueError("the screened object cannot be propagated from the window start (its orbit has decayed or its elements are too old)")
         keep = int(bad[0])
         offsets, jd, fr, rp, vp = offsets[:keep], jd[:keep], fr[:keep], rp[:keep], vp[:keep]
     effective_hours = float(offsets[-1] / 3600.0)
@@ -104,13 +105,15 @@ def screen(primary: dict, catalogue: pd.DataFrame, records_by_norad: dict, start
         found = []  # (sat index in batch, centre offset in s)
         if len(si):
             dt = dts[ti][:, None, None]
-            pts = (h00[None, :, None] * dr[si, ti][:, None, :] + h10[None, :, None] * dt * dv[si, ti][:, None, :]
-                   + h01[None, :, None] * dr[si, ti + 1][:, None, :] + h11[None, :, None] * dt * dv[si, ti + 1][:, None, :])
-            dmin = np.linalg.norm(pts, axis=2)
-            best = dmin.argmin(axis=1)
-            close = dmin[np.arange(len(si)), best] < threshold_km + HERMITE_TOL_KM
-            for s_, t_, b_ in zip(si[close], ti[close], best[close]):
-                found.append((int(s_), float(offsets[t_] + u[b_] * dts[t_])))
+            P0, P1 = dr[si, ti], dr[si, ti + 1]
+            M0, M1 = dv[si, ti] * dts[ti][:, None], dv[si, ti + 1] * dts[ti][:, None]
+            pts = (h00[None, :, None] * P0[:, None, :] + h10[None, :, None] * M0[:, None, :]
+                   + h01[None, :, None] * P1[:, None, :] + h11[None, :, None] * M1[:, None, :])
+            best = np.linalg.norm(pts, axis=2).argmin(axis=1)
+            u_min, d_min = _hermite_minimum(P0, M0, P1, M1, u[np.maximum(best - 1, 0)], u[np.minimum(best + 1, len(u) - 1)])
+            close = d_min < threshold_km + HERMITE_TOL_KM
+            for s_, t_, uu in zip(si[close], ti[close], u_min[close]):
+                found.append((int(s_), float(offsets[t_] + uu * dts[t_])))
         with np.errstate(invalid="ignore"):  # minima at the window edges
             for s_ in np.flatnonzero(far_enough & (f[:, 0] >= 0) & (dist[:, 0] < threshold_km + HERMITE_TOL_KM)):
                 found.append((int(s_), 0.0))
@@ -124,6 +127,30 @@ def screen(primary: dict, catalogue: pd.DataFrame, records_by_norad: dict, start
     out = out.sort_values("miss_km").reset_index(drop=True)
     out.attrs["window_hours_effective"] = effective_hours
     return out, n_cand
+
+
+def _hermite_minimum(P0, M0, P1, M1, lo, hi, iters: int = 24):
+    """Minimum distance of the cubic Hermite curves (vectorised over rows) inside [lo, hi] (golden-section search).
+
+    P*: positions, M*: velocity x step length, at the ends of each step; u in [0, 1] runs across the step.
+    Returns (u at the minimum, distance there).
+    """
+    def dist2(x):
+        x2 = x * x
+        x3 = x2 * x
+        p = ((2 * x3 - 3 * x2 + 1)[:, None] * P0 + (x3 - 2 * x2 + x)[:, None] * M0
+             + (3 * x2 - 2 * x3)[:, None] * P1 + (x3 - x2)[:, None] * M1)
+        return np.einsum("ij,ij->i", p, p)
+
+    g = (np.sqrt(5.0) - 1.0) / 2.0
+    a, b = lo.astype(float).copy(), hi.astype(float).copy()
+    for _ in range(iters):
+        c, d = b - g * (b - a), a + g * (b - a)
+        left = dist2(c) < dist2(d)
+        b = np.where(left, d, b)
+        a = np.where(left, a, c)
+    x = 0.5 * (a + b)
+    return x, np.sqrt(dist2(x))
 
 
 def _refine(sat_p: Satrec, sat_c: Satrec, jd0: float, fr0: float, centre_s: float, lo_s: float, hi_s: float,

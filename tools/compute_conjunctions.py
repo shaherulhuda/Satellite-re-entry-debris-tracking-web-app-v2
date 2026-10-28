@@ -22,7 +22,6 @@ import conjunction  # noqa: E402
 import dataset  # noqa: E402
 import decay  # noqa: E402
 
-STEP_S = 20.0
 _STATE: dict = {}
 
 
@@ -32,7 +31,7 @@ def _one(args):
     row = {"norad_id": int(nid), "name": recs[nid]["OBJECT_NAME"], "miss_km": None, "rel_speed_km_s": None,
            "hours_to_ca": None, "with_name": None, "with_id": None}
     try:
-        ev, _ = conjunction.screen(recs[nid], cat, recs, start_jd, hours=hours, step_s=STEP_S, threshold_km=threshold,
+        ev, _ = conjunction.screen(recs[nid], cat, recs, start_jd, hours=hours, threshold_km=threshold,
                                    primary_band=band, alt_margin_km=20.0)
     except ValueError:  # cannot be propagated over the window (e.g. it decays inside it)
         row["note"] = "not propagated over the window"

@@ -147,3 +147,34 @@ def test_screen_asset_against_modes(world):
     assert n_one <= n_deb
     with pytest.raises(ValueError):
         triage.screen_asset(iss, cat, recs, start, against="nope")
+
+
+def test_hermite_minimum_matches_straight_line_geometry():
+    import conjunction
+    # relative motion r(t) = (100 - 10 t, 50, 0) km over a 120 s step: closest approach is 50 km at t = 10 s
+    v = np.array([[-10.0, 0.0, 0.0]])
+    P0, P1 = np.array([[100.0, 50.0, 0.0]]), np.array([[100.0 - 10 * 120, 50.0, 0.0]])
+    u, d = conjunction._hermite_minimum(P0, v * 120, P1, v * 120, np.array([0.0]), np.array([0.5]))
+    assert d[0] == pytest.approx(50.0, abs=1e-3) and u[0] * 120 == pytest.approx(10.0, abs=0.01)
+
+
+def test_screening_window_is_cut_where_the_object_decays(world):
+    cat, recs = world
+    rec = recs[45711]  # STARLINK-1433: perigee ~142 km, propagates ~34 h from its own epoch
+    s = triage.conjunction.to_satrec(rec)
+    ev, _ = triage.conjunction.screen(rec, cat, recs, s.jdsatepoch + s.jdsatepochF, hours=72, threshold_km=30)
+    assert 20 < ev.attrs["window_hours_effective"] < 60
+    with pytest.raises(ValueError, match="cannot be propagated"):
+        triage.conjunction.screen(rec, cat, recs, s.jdsatepoch + s.jdsatepochF + 5, hours=24, threshold_km=30)
+
+
+def test_long_window_agrees_with_short_windows(world):
+    cat, recs = world
+    iss = recs[25544]
+    s = triage.conjunction.to_satrec(iss)
+    start = s.jdsatepoch + s.jdsatepochF
+    long_ev, _ = triage.conjunction.screen(iss, cat, recs, start, hours=72, threshold_km=25)
+    first, _ = triage.conjunction.screen(iss, cat, recs, start, hours=24, threshold_km=25)
+    key = lambda d: {(int(n), round(j * 1440)) for n, j in zip(d.norad_id, d.tca_jd)}
+    assert key(first) <= key(long_ev)  # every pass in the first day also shows up in the 3-day screen
+    assert len(long_ev) > len(first)
