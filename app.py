@@ -26,7 +26,7 @@ ASSETS = Path(__file__).parent / "assets"
 
 
 def _data_uri(name: str) -> str:
-    mime = "image/svg+xml" if name.endswith(".svg") else "image/png"
+    mime = "image/svg+xml" if name.endswith(".svg") else ("image/jpeg" if name.endswith(".jpg") else "image/png")
     return f"data:{mime};base64," + base64.b64encode((ASSETS / name).read_bytes()).decode()
 
 
@@ -53,23 +53,102 @@ df, records, ca_meta = get_data()
 hist_all = get_history()
 components_df = decay.risk_components(df)
 
-_LOGO_CSS = """<style>
-.orbisk-header { display: flex; align-items: center; gap: 1rem; margin: -1rem 0 .75rem; }
+_CSS = """<style>
+/* ---- space look: starfield page, glass panels, pill tabs, matching scrollbars, tooltips and motion ---- */
+.stApp { background: #070b1a url(__BG__) center / cover fixed no-repeat; }
+header.stAppHeader { background: transparent !important; }
+[data-testid="stAppDeployButton"], [data-testid="stMainMenu"], [data-testid="stToolbarActions"], [data-testid="stDecoration"],
+footer, [data-testid="stFooter"] { display: none !important; }
+[data-testid="stMainBlockContainer"] { padding-top: 2.2rem; }
+iframe { border-radius: 14px; }
+
+/* glass panels: soft blur, thin glowing border */
+.st-key-summary_card, [class*="st-key-pass_card_"], [data-testid="stExpander"], [data-testid="stPopoverBody"], [data-testid="stPlotlyChart"], [data-testid="stForm"] {
+    background: rgba(12, 20, 44, .55) !important; backdrop-filter: blur(10px) saturate(120%); -webkit-backdrop-filter: blur(10px) saturate(120%);
+    border: 1px solid rgba(120, 200, 255, .20) !important; border-radius: 14px !important;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, .35), inset 0 0 22px rgba(79, 209, 224, .05); }
+[data-testid="stPlotlyChart"] { padding: .5rem; }
+[data-testid="stDataFrame"] { border-radius: 14px; overflow: hidden; border: 1px solid rgba(120, 200, 255, .20); box-shadow: 0 8px 30px rgba(0, 0, 0, .35); }
+
+/* tabs: pills, orange glow on the active one (sub-tabs are smaller) */
+[role="tablist"] { gap: .4rem; border-bottom: 0 !important; box-shadow: none !important; }
+[data-testid="stTab"] { border-radius: 999px; padding: .4rem 1.05rem; background: rgba(255, 255, 255, .04);
+    border: 1px solid rgba(255, 255, 255, .08); transition: background .2s, box-shadow .2s, border-color .2s; }
+[data-testid="stTab"]:hover { background: rgba(79, 209, 224, .12); border-color: rgba(79, 209, 224, .35); }
+[data-testid="stTab"][data-selected="true"] { background: rgba(255, 122, 61, .14); border-color: rgba(255, 122, 61, .6);
+    box-shadow: 0 0 18px rgba(255, 122, 61, .35); }
+[data-testid="stTab"][data-selected="true"] p { color: #fff; font-weight: 600; }
+.react-aria-SelectionIndicator { background: #FF7A3D !important; height: 2px !important; border-radius: 2px;
+    box-shadow: 0 0 10px 1px rgba(255, 122, 61, .9); }
+[role="tabpanel"] [role="tablist"] [data-testid="stTab"] { padding: .25rem .8rem; }
+[role="tabpanel"] [role="tablist"] [data-testid="stTab"] p { font-size: .85rem; }
+
+/* scrollbars and tooltips */
+* { scrollbar-width: thin; scrollbar-color: rgba(79, 209, 224, .5) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; background: transparent; }
+::-webkit-scrollbar-thumb { background: linear-gradient(180deg, rgba(79, 209, 224, .6), rgba(255, 122, 61, .5)); border-radius: 8px;
+    border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-corner { background: transparent; }
+[data-testid="stTooltipContent"] { background: rgba(10, 16, 36, .96) !important; color: #e8eefc !important;
+    border: 1px solid rgba(79, 209, 224, .4); border-radius: 8px; box-shadow: 0 4px 18px rgba(0, 0, 0, .5); }
+
+/* motion: cards rise in, pass cards lift on hover, high-risk badge glows */
+@keyframes orbisk-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.st-key-summary_card, [class*="st-key-pass_card_"] { animation: orbisk-rise .5s ease backwards; transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease; }
+[class*="st-key-pass_card_"]:hover { transform: translateY(-4px); border-top-color: rgba(79, 209, 224, .55) !important;
+    border-right-color: rgba(79, 209, 224, .55) !important; border-bottom-color: rgba(79, 209, 224, .55) !important;
+    box-shadow: 0 14px 34px rgba(0, 0, 0, .45), 0 0 22px rgba(79, 209, 224, .25), inset 0 0 22px rgba(79, 209, 224, .08); }
+@keyframes orbisk-glow { 0%, 100% { box-shadow: 0 0 6px 0 rgba(229, 72, 77, .55); } 50% { box-shadow: 0 0 18px 3px rgba(229, 72, 77, .85); } }
+.st-key-risk_badge_red .stMarkdownBadge { animation: orbisk-glow 2.2s ease-in-out infinite; }
+.st-key-risk_badge_yellow .stMarkdownBadge { box-shadow: 0 0 10px rgba(224, 168, 0, .45); }
+.st-key-risk_badge_green .stMarkdownBadge { box-shadow: 0 0 10px rgba(48, 164, 108, .4); }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+/* header: logo top-left with the tagline beside it */
+.orbisk-header { display: flex; align-items: center; gap: 1rem; margin: 0 0 .75rem; }
 .orbisk-header img { height: 52px; width: auto; }
-.orbisk-header .for-light { display: none; }
-.orbisk-header .tagline { font-size: 1.05rem; line-height: 1.25; opacity: .75; border-left: 1px solid rgba(128,128,128,.45); padding-left: 1rem; }
+.orbisk-header .tagline { font-size: 1.05rem; line-height: 1.25; opacity: .8; border-left: 1px solid rgba(160, 200, 255, .35); padding-left: 1rem; }
 @media (max-width: 640px) { .orbisk-header .tagline { display: none; } }
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) .orbisk-header .for-dark { display: none; }
-  :root:not([data-theme="dark"]) .orbisk-header .for-light { display: inline; }
-}
-</style>"""
+
+/* floating assistant button: planet icon with a white label under it; hidden label while the popup is open */
+.st-key-ai_fab { position: fixed; top: 1rem; right: 1.5rem; z-index: 1000; width: auto !important; touch-action: none; cursor: grab; }
+.st-key-ai_fab button { width: 3.5rem; height: 3.5rem; padding: 0; border: 0; border-radius: 50%; font-size: 0;
+    background: url(__ICON__) center / contain no-repeat; }
+.st-key-ai_fab button:hover, .st-key-ai_fab button:focus, .st-key-ai_fab button:active {
+    background-color: transparent !important; border: 0 !important; box-shadow: none !important; }
+.st-key-ai_fab button > * { display: none; }
+.st-key-ai_fab::after { content: "Ask Orbisk AI"; position: absolute; top: calc(100% + 2px); left: 50%; transform: translateX(-50%);
+    white-space: nowrap; padding: 3px 10px; border-radius: 999px; font-size: .75rem; font-weight: 600; line-height: 1.3;
+    pointer-events: none; background: #ffffff; color: #0a0e1f; box-shadow: 0 1px 6px rgba(0,0,0,.35); }
+.st-key-ai_fab:has(button[aria-expanded="true"])::after { display: none; }
+[data-testid="stPopoverBody"] { width: min(520px, 92vw); max-height: calc(100vh - 8rem); overflow-y: auto; }
+
+/* tables are read-only: hide the cell pop-up box that would otherwise linger while a clicked row opens the tracker */
+[class*="gdg-"]:has(> .gdg-clip-region) { display: none !important; }
+
+/* one size scale: headings 1.35rem, numbers 1.5rem, labels and card detail 0.85-0.9rem */
+h3 { font-size: 1.35rem !important; }
+h4 { font-size: 1.2rem !important; }
+[data-testid="stMetricValue"] { font-size: 1.5rem !important; }
+[data-testid="stMetricLabel"] p { font-size: .9rem !important; }
+
+/* loading indicator: a small planet with a moving orbit (kept visible, bottom-left, now that the top bar is gone) */
+[data-testid="stStatusWidget"] { position: fixed !important; left: 1rem; bottom: 1rem; top: auto !important; right: auto !important; z-index: 1000;
+    background: rgba(12, 20, 44, .7); border: 1px solid rgba(120, 200, 255, .25); border-radius: 999px; padding: .25rem .6rem; backdrop-filter: blur(8px); }
+[data-testid="stStatusWidgetRunningIcon"] { position: relative; width: 1.6rem; height: 1.6rem; }
+[data-testid="stStatusWidgetRunningIcon"] svg { display: none; }
+[data-testid="stStatusWidgetRunningIcon"]::before { content: ""; position: absolute; inset: 0.5rem; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #5FE0C8, #14456B); }
+[data-testid="stStatusWidgetRunningIcon"]::after { content: ""; position: absolute; inset: 0; border-radius: 50%;
+    border: 1.5px solid rgba(79, 209, 224, .55); box-sizing: border-box; animation: orbisk-orbit 1.2s linear infinite;
+    background: radial-gradient(circle at 50% 0, #FF7A3D 0 2.6px, transparent 3.2px); }
+@keyframes orbisk-orbit { to { transform: rotate(360deg); } }
+</style>""".replace("__BG__", _data_uri("orbisk-bg.jpg")).replace("__ICON__", _data_uri("orbisk-mark.png"))
 # one unindented line of HTML: indented or multi-line HTML is rendered by markdown as a code block
 st.markdown(
-    _LOGO_CSS
+    _CSS
     + '<div class="orbisk-header">'
-    + f'<img class="for-dark" alt="Orbisk" src="{_data_uri("orbisk-logo-for-dark.png")}">'
-    + f'<img class="for-light" alt="Orbisk" src="{_data_uri("orbisk-logo-for-light.png")}">'
+    + f'<img alt="Orbisk" src="{_data_uri("orbisk-logo-for-dark.png")}">'
     + '<div class="tagline">Re-entry &amp; debris<br>mitigation assistant</div></div>',
     unsafe_allow_html=True,
 )
@@ -282,12 +361,13 @@ with tab_track:
             components.html(globe.orbit_html([path], height=600, highlight=True), height=610)  # starts paused at "now": matches the ground track
 
         # ---- summary card (below the globe)
-        with st.container(border=True):
+        with st.container(border=True, key="summary_card"):
             h1, h2 = st.columns([4, 1])
             h1.markdown(f"#### {name}")
             h1.caption(f"NORAD ID {int(norad)} · {row['type'].capitalize()}")
-            h2.badge({"red": "High risk", "yellow": "Medium risk", "green": "Low risk"}[level],
-                     color={"red": "red", "yellow": "orange", "green": "green"}[level])
+            with h2.container(key=f"risk_badge_{level}"):  # the key drives the badge glow in the CSS
+                st.badge({"red": "High risk", "yellow": "Medium risk", "green": "Low risk"}[level],
+                         color={"red": "red", "yellow": "orange", "green": "green"}[level])
             s1, s2, s3, s4 = st.columns(4)
             s1.metric("Risk score", f"{row['risk']:.0f} / 100")
             s2.metric("Est. time to re-entry", decay.format_days(row["decay_days"]))
@@ -451,41 +531,7 @@ with tab_triage:
             st.download_button("Download CSV", data=table_ev.to_csv(index=False).encode("utf-8"),
                                file_name=f"orbisk_conjunctions_{res['asset']}.csv", mime="text/csv", key="tri_csv")
 
-# floating chat launcher (top-right, below Streamlit's toolbar); the popover opens downward and closes with the same button
-st.markdown(
-    """<style>
-    .st-key-ai_fab { position: fixed; top: 3.75rem; right: 1.5rem; z-index: 1000; width: auto !important; }
-    .st-key-ai_fab button { width: 3.5rem; height: 3.5rem; padding: 0; border: 0; border-radius: 50%; font-size: 0;
-        background: url(__ICON__) center / contain no-repeat; }
-    .st-key-ai_fab button:hover, .st-key-ai_fab button:focus, .st-key-ai_fab button:active {
-        background-color: transparent !important; border: 0 !important; box-shadow: none !important; }
-    .st-key-ai_fab button > * { display: none; }
-    .st-key-ai_fab { touch-action: none; cursor: grab; }
-    /* label under the floating icon (white pill, readable on light and dark); hidden while the popup is open */
-    .st-key-ai_fab::after { content: "Ask Orbisk AI"; position: absolute; top: calc(100% + 2px); left: 50%; transform: translateX(-50%);
-        white-space: nowrap; padding: 3px 10px; border-radius: 999px; font-size: .75rem; font-weight: 600; line-height: 1.3;
-        pointer-events: none; background: #ffffff; color: #0a0e1f; box-shadow: 0 1px 6px rgba(0,0,0,.35); }
-    .st-key-ai_fab:has(button[aria-expanded="true"])::after { display: none; }
-    /* tables are read-only: hide the cell pop-up box that would otherwise linger while a clicked row opens the tracker */
-    [class*="gdg-"]:has(> .gdg-clip-region) { display: none !important; }
-    /* one size scale: headings 1.35rem, numbers 1.5rem, labels and card detail 0.85-0.9rem */
-    h3 { font-size: 1.35rem !important; }
-    h4 { font-size: 1.2rem !important; }
-    [data-testid="stMetricValue"] { font-size: 1.5rem !important; }
-    [data-testid="stMetricLabel"] p { font-size: .9rem !important; }
-    /* loading indicator: Streamlit's running man becomes a small planet with a moving orbit */
-    [data-testid="stStatusWidgetRunningIcon"] { position: relative; width: 1.6rem; height: 1.6rem; }
-    [data-testid="stStatusWidgetRunningIcon"] svg { display: none; }
-    [data-testid="stStatusWidgetRunningIcon"]::before { content: ""; position: absolute; inset: 0.5rem; border-radius: 50%;
-        background: radial-gradient(circle at 35% 30%, #5FE0C8, #14456B); }
-    [data-testid="stStatusWidgetRunningIcon"]::after { content: ""; position: absolute; inset: 0; border-radius: 50%;
-        border: 1.5px solid rgba(79, 209, 224, .55); box-sizing: border-box; animation: orbisk-orbit 1.2s linear infinite;
-        background: radial-gradient(circle at 50% 0, #FF7A3D 0 2.6px, transparent 3.2px); }
-    @keyframes orbisk-orbit { to { transform: rotate(360deg); } }
-    [data-testid="stPopoverBody"] { width: min(520px, 92vw); max-height: calc(100vh - 8rem); overflow-y: auto; }
-    </style>""".replace("__ICON__", _data_uri("orbisk-mark.png")),
-    unsafe_allow_html=True,
-)
+# floating chat launcher (styles are in the CSS block at the top); the popover opens downward and closes with the same button
 with st.container(key="ai_fab"):
     with st.popover("Ask Orbisk AI"):
         st.caption("Optional. The app is fully offline without this. When you add an Anthropic API key the assistant can "
@@ -628,7 +674,7 @@ if (!P.__orbiskDrag) {
   new MutationObserver(nameButton).observe(D.body, {childList: true, subtree: true});
   const apply = (x, y) => {
     const w = 56, h = 56;
-    x = Math.min(Math.max(24, x), Math.max(24, P.innerWidth - w - 24)); y = Math.min(Math.max(60, y), Math.max(60, P.innerHeight - h - 30));  // keep clear of Streamlit's top bar
+    x = Math.min(Math.max(24, x), Math.max(24, P.innerWidth - w - 24)); y = Math.min(Math.max(12, y), Math.max(12, P.innerHeight - h - 30));  
     style.textContent = `.st-key-ai_fab{left:${x}px !important;top:${y}px !important;right:auto !important;}`;
     return [x, y];
   };
