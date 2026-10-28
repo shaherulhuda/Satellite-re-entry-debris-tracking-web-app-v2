@@ -277,15 +277,14 @@ with tab_triage:
     if mode.startswith("Screen"):
         asset_ids = df.sort_values("OBJECT_NAME")["NORAD_CAT_ID"].astype(int).tolist()
         with st.form("tri_asset_form"):
-            a1, a2, a3, a4 = st.columns([3, 1, 1, 2])
+            a1, a2, a3 = st.columns([3, 1, 1])
             asset = a1.selectbox("Object to screen", asset_ids,
                                  index=asset_ids.index(25544) if 25544 in asset_ids else 0, format_func=label)
             hours = a2.slider("Window (h)", 1, 72, 48)
             thr = a3.slider("Report within (km)", 1, 100, 25)
-            start_mode = a4.radio("Window starts at", ["Snapshot time", "Now"], horizontal=True)
             run = st.form_submit_button("Run screening")
         if run:
-            jd0, ts0 = start_time(start_mode)
+            jd0, ts0 = start_time("Snapshot time")
             with st.spinner("Propagating candidates…"):
                 try:
                     ev, n = triage.screen_asset(records[int(asset)], df, records, jd0, hours=hours, threshold_km=thr,
@@ -349,13 +348,12 @@ with tab_triage:
 
         st.markdown("#### 2. Who it passes close to")
         with st.form("tri_deb_form"):
-            b1, b2, b3 = st.columns([1, 1, 2])
+            b1, b2 = st.columns(2)
             dh = b1.slider("Window (h)", 6, 48, 24)
             dthr = b2.slider("Report within (km)", 5, 100, 25)
-            dstart = b3.radio("Window starts at", ["Snapshot time", "Now"], horizontal=True)
             drun = st.form_submit_button("Screen against active satellites")
         if drun:
-            jd0, ts0 = start_time(dstart)
+            jd0, ts0 = start_time("Snapshot time")
             with st.spinner("Propagating satellites… (can take ~10-20 s)"):
                 try:
                     thr_ev, thr_n = triage.screen_debris_vs_satellites(records[int(dsel)], df, records, jd0, hours=dh, threshold_km=dthr)
