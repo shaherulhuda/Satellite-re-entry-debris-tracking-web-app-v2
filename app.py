@@ -64,11 +64,9 @@ def watchlist_paths(norad_ids: tuple):
 
 
 @st.cache_data(ttl=300)
-def debris_orbit_paths(exclude: tuple):
-    """Orbit lines for every debris fragment except those already drawn as watchlist objects."""
-    skip = set(exclude)
-    recs = [records[int(i)] for i in df.loc[df["source"] == "debris", "NORAD_CAT_ID"] if int(i) not in skip]
-    return orbits.orbit_paths_fast(recs, n_points=48)
+def debris_orbit_paths(debris_ids: tuple):
+    """Orbit lines for the given debris fragments (empty tuple = none)."""
+    return orbits.orbit_paths_fast([records[int(i)] for i in debris_ids], n_points=48) if debris_ids else []
 
 
 def label(norad_id: int) -> str:
@@ -126,10 +124,13 @@ def start_time(mode: str):
 # ---------------------------------------------------------------- Watchlist
 with tab_watch:
     st.subheader("Watchlist")
-    c_mode, c_n = st.columns([3, 1])
+    c_mode, c_n, c_d = st.columns([3, 1, 1])
     mode = c_mode.radio("Rank by", ["Risk score (highest first)", "Soonest estimated re-entry", "Lowest perigee"],
                         horizontal=True)
     n_show = c_n.number_input("Objects", 10, 200, 50, step=10)
+    n_deb_total = int((df["source"] == "debris").sum())
+    n_deb_show = c_d.number_input("Debris orbits", 0, n_deb_total, 0, step=50,
+                                  help="How many debris orbits to draw on the globe, highest ranked first. 0 = hidden.")
 
     with st.expander("Risk score: formula and weights"):
         st.markdown(
@@ -169,10 +170,12 @@ with tab_watch:
     st.caption("Decay figures are rough estimates from each object's measured drag (see *How these numbers are computed*). "
                "Many active satellites (e.g. Starlink) manoeuvre to hold altitude, so their drag-based estimate is not a prediction.")
     st.caption("Orbits of the listed objects around a rotating Earth (one revolution each; yellow dots = positions now). "
-               "Grey lines and dots are debris fragments; untick \"Debris orbits\" in the globe's control bar to hide them. "
+               "Set \"Debris orbits\" above to draw debris fragments as grey lines and dots (0 = hidden); the globe's control bar can switch them off again. "
                "The animation loops until you press Pause. Drag to rotate, scroll to zoom.")
     table_ids = tuple(int(i) for i in table["NORAD ID"])
-    components.html(globe.orbit_html(watchlist_paths(table_ids), debris=debris_orbit_paths(table_ids)), height=660)
+    shown = set(table_ids)
+    deb_ids = tuple(int(i) for i in ranked.loc[ranked["source"] == "debris", "NORAD_CAT_ID"] if int(i) not in shown)[:int(n_deb_show)]
+    components.html(globe.orbit_html(watchlist_paths(table_ids), debris=debris_orbit_paths(deb_ids)), height=660)
     st.dataframe(
         table, width="stretch", hide_index=True,
         column_config={
