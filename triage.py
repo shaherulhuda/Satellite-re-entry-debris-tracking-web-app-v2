@@ -20,10 +20,13 @@ def _enrich(events: pd.DataFrame, catalogue: pd.DataFrame) -> pd.DataFrame:
     if events.empty:
         return events
     cols = ["NORAD_CAT_ID", "perigee_km", "apogee_km", "INCLINATION", "decay_days", "decay_status", "type"]
+    if "GROUP" in catalogue:
+        cols.append("GROUP")
     other = catalogue[cols].rename(columns={"NORAD_CAT_ID": "norad_id", "perigee_km": "other_perigee_km",
                                             "apogee_km": "other_apogee_km", "INCLINATION": "other_inclination_deg",
                                             "decay_days": "other_est_days_to_reentry",
-                                            "decay_status": "other_decay_status", "type": "other_type"})
+                                            "decay_status": "other_decay_status", "type": "other_type",
+                                            "GROUP": "other_group"})
     return events.merge(other, on="norad_id", how="left")
 
 
@@ -38,9 +41,15 @@ def _screen(primary: dict, catalogue: pd.DataFrame, candidates: pd.DataFrame, re
 
 
 def screen_asset_vs_debris(asset: dict, catalogue: pd.DataFrame, records: dict, start_jd: float,
-                           hours: float = 48.0, threshold_km: float = 20.0):
-    """Closest passes of one chosen satellite against the debris set. Returns (events, candidates_screened)."""
-    return _screen(asset, catalogue, catalogue[catalogue["source"] == "debris"], records, start_jd, hours, threshold_km)
+                           hours: float = 48.0, threshold_km: float = 20.0, groups: list[str] | None = None):
+    """Closest passes of one chosen satellite against the debris set (optionally only some groups).
+
+    Returns (events, candidates_screened).
+    """
+    deb = catalogue[catalogue["source"] == "debris"]
+    if groups is not None and "GROUP" in deb:
+        deb = deb[deb["GROUP"].isin(groups)]
+    return _screen(asset, catalogue, deb, records, start_jd, hours, threshold_km)
 
 
 def screen_debris_vs_satellites(debris_obj: dict, catalogue: pd.DataFrame, records: dict, start_jd: float,

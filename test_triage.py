@@ -29,6 +29,7 @@ def test_bundled_debris_file_parses_fully_and_matches_sgp4_tle_parser():
     text = debris.DEBRIS_PATH.read_text()
     recs, skipped = debris.parse_tle_text(text)
     assert len(recs) == 1983 and skipped == 0
+    assert {r['GROUP'] for r in debris.load_debris_records()} >= {'Fengyun-1C'}
     lines = [ln for ln in text.splitlines() if ln.strip()]
     for k in (0, 700, 1982):
         ref = Satrec.twoline2rv(lines[3 * k + 1], lines[3 * k + 2])

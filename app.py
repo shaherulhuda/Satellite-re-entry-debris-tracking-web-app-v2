@@ -17,6 +17,7 @@ import history
 import llm
 import maneuver
 import orbits
+import snapshot
 import triage
 
 st.set_page_config(page_title="Re-Entry & Debris Mitigation Assistant", layout="wide")
@@ -24,7 +25,7 @@ st.set_page_config(page_title="Re-Entry & Debris Mitigation Assistant", layout="
 
 @st.cache_data
 def get_data():
-    """Active satellites + the Fengyun-1C debris set, one record per NORAD id."""
+    """Active satellites + every debris group in data/debris, one record per NORAD id."""
     active, deb = orbits.load_records(), debris.load_debris_records()
     recs = debris.merge_records(active, deb)
     cat = decay.estimate_decay(orbits.catalog_from_records(recs))
@@ -45,8 +46,24 @@ components_df = decay.risk_components(df)
 
 st.title("Re-Entry & Debris Mitigation Assistant")
 n_deb = int((df["source"] == "debris").sum())
+manifest = snapshot.load_manifest()
 st.caption(f"Data snapshot from {orbits.snapshot_date(df)} · {len(df):,} objects"
-           + (f" (including {n_deb:,} Fengyun-1C debris fragments)" if n_deb else ""))
+           + (f" (including {n_deb:,} debris fragments)" if n_deb else "")
+           + (f" · all sets downloaded together {manifest['fetched_utc'][:16].replace('T', ' ')} UTC" if manifest else ""))
+health = snapshot.health(df)
+for issue in health["issues"]:
+    st.warning(f"{issue}. Run `python tools/refresh_data.py` to download every data set again at the same time.")
+if health["newest_age_days"] > 7:
+    st.warning(f"The newest element set is {health['newest_age_days']:.0f} days old, so positions shown for 'now' are extrapolated "
+               "and less accurate. Run `python tools/refresh_data.py` to download fresh data.")
+with st.expander("Data sets and snapshot consistency"):
+    st.dataframe(pd.DataFrame({
+        "Data set": health["table"]["set"], "Objects": health["table"]["objects"],
+        "Newest element epoch": health["table"]["newest"].dt.strftime("%Y-%m-%d %H:%M"),
+        "Median age vs newest (days)": health["table"]["median_age_days"].round(1)}), width="stretch", hide_index=True)
+    st.caption("Position error grows with the age of an element set, so all sets should come from one download. "
+               "`python tools/refresh_data.py` fetches the active catalogue and every debris group at once; this table "
+               "flags any set that has drifted more than a few days from the rest.")
 
 tab_watch, tab_track, tab_conj, tab_triage = st.tabs(["Watchlist", "Tracker", "Conjunctions", "Triage desk"])
 
@@ -292,6 +309,7 @@ def events_table(ev: pd.DataFrame) -> pd.DataFrame:
         "Closest approach (UTC)": [fmt_utc(j) for j in ev["tca_jd"]],
         "Miss distance (km)": ev["miss_km"], "Relative speed (km/s)": ev["rel_speed_km_s"],
         "Its perigee (km)": ev["other_perigee_km"], "Its apogee (km)": ev["other_apogee_km"],
+        **({"Debris set": ev["other_group"].fillna("")} if "other_group" in ev else {}),
     })
 
 
@@ -326,13 +344,16 @@ def memo_block(kind: str, facts: dict, task: str):
 with tab_triage:
     st.subheader("Triage desk")
     n_deb_t = int((df["source"] == "debris").sum())
-    st.caption(f"Debris set: {n_deb_t:,} Fengyun-1C breakup fragments from the bundled TLE file. "
+    st.caption(f"Debris sets: {n_deb_t:,} fragments from {df['GROUP'].nunique()} breakup event(s) "
+               f"({', '.join(sorted(df['GROUP'].dropna().unique()))}). "
                "Screening and cost figures are first-order estimates from mean elements, for triage, not operational decisions.")
     mode = st.radio("View", ["Protect a satellite", "Follow a debris object"], horizontal=True, key="tri_mode")
 
     if mode == "Protect a satellite":
         asset_ids = df[df["source"] == "active"].sort_values("OBJECT_NAME")["NORAD_CAT_ID"].astype(int).tolist()
+        deb_groups = sorted(df.loc[df["source"] == "debris", "GROUP"].dropna().unique())
         with st.form("tri_asset_form"):
+            use_groups = st.multiselect("Debris sets to screen against", deb_groups, default=deb_groups)
             a1, a2, a3, a4 = st.columns([3, 1, 1, 2])
             asset = a1.selectbox("Satellite to protect", asset_ids,
                                  index=asset_ids.index(25544) if 25544 in asset_ids else 0, format_func=label)
@@ -344,7 +365,8 @@ with tab_triage:
             jd0, ts0 = start_time(start_mode)
             with st.spinner("Propagating debris…"):
                 try:
-                    ev, n = triage.screen_asset_vs_debris(records[int(asset)], df, records, jd0, hours=hours, threshold_km=thr)
+                    ev, n = triage.screen_asset_vs_debris(records[int(asset)], df, records, jd0, hours=hours, threshold_km=thr,
+                                                          groups=use_groups)
                 except Exception as exc:
                     st.error(f"Screening failed: {exc}")
                 else:
@@ -404,13 +426,17 @@ with tab_triage:
                 memo_block("asset", facts, llm.DECISION_MEMO_TASK)
 
     else:
-        deb = df[df["source"] == "debris"].sort_values("decay_days", na_position="last")
+        gsel = st.selectbox("Debris set", ["All"] + sorted(df.loc[df["source"] == "debris", "GROUP"].dropna().unique()), key="tri_group")
+        deb = df[df["source"] == "debris"]
+        if gsel != "All":
+            deb = deb[deb["GROUP"] == gsel]
+        deb = deb.sort_values("decay_days", na_position="last")
         deb_ids = deb["NORAD_CAT_ID"].astype(int).tolist()
         info = {int(r.NORAD_CAT_ID): r for r in deb.itertuples()}
 
         def deb_label(i):
             r = info[i]
-            return f"{r.OBJECT_NAME} ({i}) · est. {decay.format_days(r.decay_days)} · perigee {r.perigee_km:.0f} km"
+            return f"{r.OBJECT_NAME} ({i}) · {r.GROUP} · est. {decay.format_days(r.decay_days)} · perigee {r.perigee_km:.0f} km"
 
         dsel = st.selectbox("Debris object (soonest estimated re-entry first)", deb_ids, format_func=deb_label, key="tri_deb")
         drow = df[df["NORAD_CAT_ID"] == dsel].iloc[0]
@@ -576,7 +602,7 @@ with st.expander("How these numbers are computed"):
         "- **Risk score:** weighted blend of perigee, decay time, inclination and object type; weights are adjustable above.\n"
         "- **Footprint:** latitude band ±min(i, 180−i); time per latitude from sin φ = sin i · sin u.\n"
         "- **Conjunctions:** coarse-grid SGP4 screening with 0.5 s refinement of local minima.\n"
-        "- **Debris and triage:** the Fengyun-1C TLE file is parsed into the same record format and screened with the same SGP4 conjunction code. "
+        "- **Debris and triage:** the debris groups (TLE or CelesTrak JSON files in data/debris) are parsed into the same record format and screened with the same SGP4 conjunction code. "
         "Avoidance cost: tangential burn displacement from Clohessy-Wiltshire (best/worst case for the unknown miss direction), propellant from the rocket equation. "
         "Altitude bands are the densest ranges of the active catalogue, found from the data.\n"
         "- **Assistant (optional):** off unless an API key is supplied. The model only receives numbers computed above, or calls the app's own lookup functions; it never computes orbits.\n"

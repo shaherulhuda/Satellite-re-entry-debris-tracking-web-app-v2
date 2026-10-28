@@ -6,9 +6,19 @@ estimate, SGP4 via skyfield / sgp4, conjunction screening) works on them unchang
 from __future__ import annotations
 
 import datetime as dt
+import json
 from pathlib import Path
 
-DEBRIS_PATH = Path(__file__).with_name("data") / "fengyun1c_debris.tle"
+DEBRIS_DIR = Path(__file__).with_name("data") / "debris"
+DEBRIS_PATH = DEBRIS_DIR / "fengyun-1c.tle"  # the originally supplied file
+
+# group slug (file name) -> (label shown in the app, CelesTrak GROUP query used by tools/refresh_data.py)
+GROUPS = {
+    "fengyun-1c": ("Fengyun-1C", "1999-025"),
+    "iridium-33": ("Iridium-33", "iridium-33-debris"),
+    "cosmos-2251": ("Cosmos-2251", "cosmos-2251-debris"),
+}
+REQUIRED_KEYS = {"OBJECT_NAME", "NORAD_CAT_ID", "EPOCH", "MEAN_MOTION", "ECCENTRICITY", "INCLINATION"}
 
 
 def _implied_decimal(field: str) -> float:
@@ -68,12 +78,34 @@ def parse_tle_text(text: str) -> tuple[list[dict], int]:
     return records, skipped
 
 
-def load_debris_records(path: Path | str = DEBRIS_PATH) -> list[dict]:
-    """Debris records from the bundled file ([] if the file is missing)."""
-    p = Path(path)
-    if not p.exists():
+def parse_omm_json(text: str) -> list[dict]:
+    """CelesTrak OMM JSON (list of dicts) -> records, dropping entries without the needed fields."""
+    data = json.loads(text)
+    if not isinstance(data, list):
+        raise ValueError("expected a JSON list of OMM records")
+    return [r for r in data if isinstance(r, dict) and REQUIRED_KEYS <= set(r)]
+
+
+def load_debris_records(directory: Path | str = DEBRIS_DIR) -> list[dict]:
+    """All debris groups found in `directory` (.tle / .txt / .json), one record per NORAD id.
+
+    The file name (without extension) is the group slug; each record gets a `GROUP` label so the
+    app can filter by breakup event. Missing directory -> [].
+    """
+    d = Path(directory)
+    if not d.is_dir():
         return []
-    return parse_tle_text(p.read_text(encoding="utf-8"))[0]
+    merged: list[dict] = []
+    for path in sorted(d.iterdir()):
+        if path.suffix.lower() not in (".tle", ".txt", ".json"):
+            continue
+        text = path.read_text(encoding="utf-8")
+        recs = parse_omm_json(text) if path.suffix.lower() == ".json" else parse_tle_text(text)[0]
+        label = GROUPS.get(path.stem, (path.stem,))[0]
+        for r in recs:
+            r["GROUP"] = label
+        merged = merge_records(merged, recs)
+    return merged
 
 
 def merge_records(active: list[dict], debris: list[dict]) -> list[dict]:

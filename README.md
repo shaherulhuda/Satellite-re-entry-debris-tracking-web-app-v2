@@ -26,3 +26,17 @@ The **Triage desk** tab has two views:
 
 Screening uses mean elements and gives no collision probability; avoidance costs assume a small impulsive burn. These are
 triage estimates, not operational decisions.
+
+## Keeping every data set at the same snapshot
+
+All data sets (the active catalogue and each debris group: Fengyun-1C, Iridium-33, Cosmos-2251) should come from one download
+so their element epochs line up. On a machine with internet access run:
+
+```
+python tools/refresh_data.py          # downloads everything together; all-or-nothing
+git add -A && git commit -m "Refresh data snapshot"
+```
+
+The script writes `active.json`, one file per group in `data/debris/` and `data/snapshot.json`, and appends the perigee history.
+The app shows the data age and warns when a data set is out of step with the others or the newest element set is old.
+Any extra `.tle` / `.json` file dropped into `data/debris/` is loaded as another debris group.
