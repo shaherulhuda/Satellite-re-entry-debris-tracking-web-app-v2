@@ -53,20 +53,23 @@ hist_all = get_history()
 components_df = decay.risk_components(df)
 
 _LOGO_CSS = """<style>
-.orbisk-logo { text-align: center; margin: -1rem 0 .5rem; }
-.orbisk-logo img { height: 64px; width: auto; }
-.orbisk-logo .for-light { display: none; }
+.orbisk-header { display: flex; align-items: center; gap: 1rem; margin: -1rem 0 .75rem; }
+.orbisk-header img { height: 52px; width: auto; }
+.orbisk-header .for-light { display: none; }
+.orbisk-header .tagline { font-size: 1.05rem; line-height: 1.25; opacity: .75; border-left: 1px solid rgba(128,128,128,.45); padding-left: 1rem; }
+@media (max-width: 640px) { .orbisk-header .tagline { display: none; } }
 @media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) .orbisk-logo .for-dark { display: none; }
-  :root:not([data-theme="dark"]) .orbisk-logo .for-light { display: inline; }
+  :root:not([data-theme="dark"]) .orbisk-header .for-dark { display: none; }
+  :root:not([data-theme="dark"]) .orbisk-header .for-light { display: inline; }
 }
 </style>"""
 # one unindented line of HTML: indented or multi-line HTML is rendered by markdown as a code block
 st.markdown(
     _LOGO_CSS
-    + '<div class="orbisk-logo" role="img" aria-label="Orbisk: Re-Entry &amp; Debris Mitigation">'
+    + '<div class="orbisk-header">'
     + f'<img class="for-dark" alt="Orbisk" src="{_data_uri("orbisk-logo-for-dark.png")}">'
-    + f'<img class="for-light" alt="Orbisk" src="{_data_uri("orbisk-logo-for-light.png")}"></div>',
+    + f'<img class="for-light" alt="Orbisk" src="{_data_uri("orbisk-logo-for-light.png")}">'
+    + '<div class="tagline">Re-entry &amp; debris<br>mitigation assistant</div></div>',
     unsafe_allow_html=True,
 )
 
