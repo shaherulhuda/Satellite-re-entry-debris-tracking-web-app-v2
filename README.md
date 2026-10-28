@@ -17,10 +17,10 @@ access code and `ASSISTANT_MAX_REQUESTS` (default 30) to cap requests per sessio
 `data/debris/` holds the debris groups (Fengyun-1C, Iridium-33, Cosmos-2251; CelesTrak JSON or 3-line TLE). `debris.py` parses them into the
 same record format as `active.json`, so they flow through every feature (watchlist, tracker, conjunctions, chat tools).
 
-The **Triage desk** tab has two views:
+The **Conjunctions & Triage** tab (it replaces the separate Conjunctions and Triage desk tabs) has two views:
 
-- **Protect a satellite:** closest passes of one satellite against the debris set (default 48 h), a first-order avoidance-burn
-  cost (delta-v from Clohessy-Wiltshire, propellant from the rocket equation, `maneuver.py`), and an optional AI decision memo.
+- **Screen an object for close approaches:** closest passes of any object against debris, active satellites or everything
+  (default 48 h), and for satellites a first-order avoidance-burn cost (delta-v from Clohessy-Wiltshire, propellant from the rocket equation, `maneuver.py`), and an optional AI decision memo.
 - **Follow a debris object:** its estimated descent through the crowded altitude bands (found from the data), which satellites
   it passes close to, and the latitudes it can come down within, with an optional AI end-of-life briefing.
 

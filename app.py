@@ -59,7 +59,7 @@ with st.expander("Data sets and snapshot consistency"):
     st.caption("Position error grows with the age of an element set, so all sets should come from one download. "
                "`python tools/refresh_data.py` fetches the active catalogue and every debris group at once.")
 
-tab_watch, tab_track, tab_conj, tab_triage = st.tabs(["Watchlist", "Tracker", "Conjunctions", "Triage desk"])
+tab_watch, tab_track, tab_triage = st.tabs(["Watchlist", "Tracker", "Conjunctions & Triage"])
 
 
 @st.cache_data(ttl=300)
@@ -248,50 +248,6 @@ with tab_track:
                "near the band's edges (right). Where it actually re-enters depends on the final orbits and cannot be "
                "predicted days ahead; this shows where it *can* pass, not where it *will* land.")
 
-# ---------------------------------------------------------------- Conjunctions
-with tab_conj:
-    st.subheader("Close-approach screening")
-    st.caption("Screens one object against every catalogue object in a similar altitude band, using SGP4 on the stored elements. "
-               "This is a screening aid, not an operational conjunction assessment: no uncertainty or collision probability.")
-    snap = df["EPOCH_DT"].max()
-    with st.form("conj"):
-        a, b, c, d = st.columns([3, 1, 1, 2])
-        cn = a.selectbox("Primary object", ids, index=default, format_func=label)
-        hours = b.slider("Window (h)", 1, 24, 6)
-        thr = c.slider("Report within (km)", 1, 50, 10)
-        start_mode = d.radio("Window starts at", ["Snapshot time", "Now"], horizontal=True)
-        go_btn = st.form_submit_button("Run screening")
-    if go_btn:
-        if start_mode == "Now":
-            n = pd.Timestamp.utcnow()
-        else:
-            n = snap
-        jd, fr = jday(n.year, n.month, n.day, n.hour, n.minute, n.second + n.microsecond / 1e6)
-        with st.spinner("Propagating candidates…"):
-            try:
-                events, n_cand = conjunction.screen(records[int(cn)], df, records, jd + fr, hours=hours, threshold_km=thr)
-            except Exception as exc:
-                st.error(f"Screening failed: {exc}")
-            else:
-                st.write(f"Window start: {n:%Y-%m-%d %H:%M} UTC · {n_cand} objects in a similar altitude band · "
-                         f"**{len(events)}** approaches within {thr} km")
-                if len(events):
-                    ev = pd.DataFrame({
-                        "Object": events["name"], "NORAD ID": events["norad_id"],
-                        "Closest approach (UTC)": [conjunction.jd_to_datetime(j).strftime("%Y-%m-%d %H:%M:%S") for j in events["tca_jd"]],
-                        "Miss distance (km)": events["miss_km"], "Relative speed (km/s)": events["rel_speed_km_s"],
-                    })
-                    st.dataframe(ev, width="stretch", hide_index=True, column_config={
-                        "NORAD ID": st.column_config.NumberColumn(format="%d"),
-                        "Miss distance (km)": st.column_config.NumberColumn(format="%.2f"),
-                        "Relative speed (km/s)": st.column_config.NumberColumn(format="%.2f"),
-                    })
-                else:
-                    st.info("No approaches inside the threshold in this window.")
-                st.caption("Objects that stay within ~20 km of the primary for the whole window (docked modules, tight formations) are ignored. "
-                           "Mean-element positions are only good to roughly a kilometre or more, and worse for old element sets.")
-
-# ---------------------------------------------------------------- Assistant (optional, needs an API key)
 # ---------------------------------------------------------------- Triage desk
 ctx = llm.DataContext(df, records, components_df, weights, hist_all)
 fmt_utc = lambda jd: conjunction.jd_to_datetime(jd).strftime("%Y-%m-%d %H:%M:%S")
@@ -336,66 +292,78 @@ def memo_block(kind: str, facts: dict, task: str):
 
 
 with tab_triage:
-    st.subheader("Triage desk")
+    st.subheader("Conjunctions & triage")
     n_deb_t = int((df["source"] == "debris").sum())
     st.caption(f"Debris sets: {n_deb_t:,} fragments from {df['GROUP'].nunique()} breakup event(s) "
                f"({', '.join(sorted(df['GROUP'].dropna().unique()))}). "
+               "Screen any object against debris, satellites or everything; satellites also get an avoidance-cost estimate. "
                "Screening and cost figures are first-order estimates from mean elements, for triage, not operational decisions.")
-    mode = st.radio("View", ["Protect a satellite", "Follow a debris object"], horizontal=True, key="tri_mode")
+    mode = st.radio("View", ["Screen an object for close approaches", "Follow a debris object"], horizontal=True, key="tri_mode")
 
-    if mode == "Protect a satellite":
-        asset_ids = df[df["source"] == "active"].sort_values("OBJECT_NAME")["NORAD_CAT_ID"].astype(int).tolist()
+    if mode.startswith("Screen"):
+        asset_ids = df.sort_values("OBJECT_NAME")["NORAD_CAT_ID"].astype(int).tolist()
         deb_groups = sorted(df.loc[df["source"] == "debris", "GROUP"].dropna().unique())
         with st.form("tri_asset_form"):
-            use_groups = st.multiselect("Debris sets to screen against", deb_groups, default=deb_groups)
+            f1, f2 = st.columns([1, 2])
+            against = f1.selectbox("Screen against", list(triage.AGAINST), format_func=triage.AGAINST.get)
+            use_groups = f2.multiselect("Debris sets included", deb_groups, default=deb_groups)
             a1, a2, a3, a4 = st.columns([3, 1, 1, 2])
-            asset = a1.selectbox("Satellite to protect", asset_ids,
+            asset = a1.selectbox("Object to screen", asset_ids,
                                  index=asset_ids.index(25544) if 25544 in asset_ids else 0, format_func=label)
-            hours = a2.slider("Window (h)", 6, 72, 48)
-            thr = a3.slider("Report within (km)", 5, 100, 25)
+            hours = a2.slider("Window (h)", 1, 72, 48)
+            thr = a3.slider("Report within (km)", 1, 100, 25)
             start_mode = a4.radio("Window starts at", ["Snapshot time", "Now"], horizontal=True)
-            run = st.form_submit_button("Screen against debris")
+            run = st.form_submit_button("Run screening")
         if run:
             jd0, ts0 = start_time(start_mode)
-            with st.spinner("Propagating debris…"):
+            with st.spinner("Propagating candidates…"):
                 try:
-                    ev, n = triage.screen_asset_vs_debris(records[int(asset)], df, records, jd0, hours=hours, threshold_km=thr,
-                                                          groups=use_groups)
+                    ev, n = triage.screen_asset(records[int(asset)], df, records, jd0, hours=hours, threshold_km=thr,
+                                                against=against, groups=use_groups)
                 except Exception as exc:
                     st.error(f"Screening failed: {exc}")
                 else:
                     st.session_state["tri_asset"] = {"asset": int(asset), "events": ev, "n": n, "hours": hours, "thr": thr,
-                                                     "start": ts0.strftime("%Y-%m-%d %H:%M")}
+                                                     "against": against, "start": ts0.strftime("%Y-%m-%d %H:%M")}
                     st.session_state.pop("memo_asset", None)
         res = st.session_state.get("tri_asset")
         if res:
             arow = df[df["NORAD_CAT_ID"] == res["asset"]].iloc[0]
             ev = res["events"]
             m1, m2, m3 = st.columns(3)
-            m1.metric("Debris in a similar altitude band", f"{res['n']:,}")
+            against_name = triage.AGAINST[res["against"]]
+            m1.metric("Objects in a similar altitude band", f"{res['n']:,}")
             m2.metric(f"Passes within {res['thr']} km", f"{len(ev)}")
             m3.metric("Closest pass", f"{ev['miss_km'].min():.1f} km" if len(ev) else "none")
             st.caption(f"{records[res['asset']]['OBJECT_NAME']} · window from {res['start']} UTC for {res['hours']} h. "
                        "Objects holding within ~20 km of each other the whole window (docked/formation) are ignored.")
             if not len(ev):
-                st.success("No debris passes inside the threshold in this window.")
+                st.success(f"No close approaches against {against_name.lower()} inside the threshold in this window.")
             else:
                 st.dataframe(events_table(ev), width="stretch", hide_index=True, column_config=EVENT_CONFIG)
 
                 st.markdown("#### Avoidance cost")
-                st.caption("Delta-v from a small tangential burn (Clohessy-Wiltshire) and fuel from the rocket equation. "
-                           "The existing miss direction is unknown, so a best case (burn moves it away) and a worst case are shown.")
                 labels = [f"{r.name} · {r.miss_km:.1f} km at {fmt_utc(r.tca_jd)}" for r in ev.itertuples()]
                 pick = st.selectbox("Pass to plan around", range(len(ev)), format_func=lambda i: labels[i], key="tri_pass")
-                p1, p2, p3, p4 = st.columns(4)
-                preset = p1.selectbox("Vehicle", list(maneuver.PRESETS), key="tri_preset")
-                m0, isp0 = maneuver.PRESETS[preset]
-                mass = p2.number_input("Mass (kg)", 1.0, 1_000_000.0, float(m0), key=f"tri_mass_{preset}")
-                isp = p3.number_input("Isp (s)", 50.0, 5000.0, float(isp0), key=f"tri_isp_{preset}")
-                target = p4.number_input("Target miss (km)", 1.0, 100.0, 5.0, key="tri_target")
                 chosen = ev.iloc[int(pick)]
-                plan = maneuver.avoidance_plan(float(chosen["miss_km"]), target, float(arow["MEAN_MOTION"]), mass, isp)
-                if plan.empty:
+                can_burn = arow["source"] == "active"
+                plan, preset, mass, isp, target = pd.DataFrame(), None, None, None, None
+                if can_burn:
+                    st.caption("Delta-v from a small tangential burn (Clohessy-Wiltshire) and fuel from the rocket equation. "
+                               "The existing miss direction is unknown, so a best case (burn moves it away) and a worst case are shown.")
+                    p1, p2, p3, p4 = st.columns(4)
+                    preset = p1.selectbox("Vehicle", list(maneuver.PRESETS), key="tri_preset")
+                    m0, isp0 = maneuver.PRESETS[preset]
+                    mass = p2.number_input("Mass (kg)", 1.0, 1_000_000.0, float(m0), key=f"tri_mass_{preset}")
+                    isp = p3.number_input("Isp (s)", 50.0, 5000.0, float(isp0), key=f"tri_isp_{preset}")
+                    target = p4.number_input("Target miss (km)", 1.0, 100.0, 5.0, key="tri_target")
+                    plan = maneuver.avoidance_plan(float(chosen["miss_km"]), target, float(arow["MEAN_MOTION"]), mass, isp)
+                else:
+                    st.caption("The screened object is debris and cannot manoeuvre, so there is no avoidance cost to estimate "
+                               "here. Screen the other object to see its cost.")
+                if not can_burn:
+                    pass
+                elif plan.empty:
                     st.success(f"This pass already misses by {chosen['miss_km']:.1f} km, above the {target:.0f} km target: no burn needed.")
                 else:
                     st.dataframe(pd.DataFrame({
@@ -416,7 +384,8 @@ with tab_triage:
                                "relative_speed_km_s": round(float(chosen["rel_speed_km_s"]), 2)}
                 inputs = {"vehicle": preset, "mass_kg": mass, "isp_s": isp, "target_miss_km": target}
                 facts = triage.asset_facts(llm.object_facts(ctx, res["asset"], include_position=False), ev, res["n"],
-                                           res["hours"], res["thr"], res["start"], plan, inputs, chosen_info)
+                                           res["hours"], res["thr"], res["start"], plan, inputs, chosen_info,
+                                           against=against_name.lower())
                 memo_block("asset", facts, llm.DECISION_MEMO_TASK)
 
     else:
@@ -595,7 +564,7 @@ with st.expander("How these numbers are computed"):
         "Requires positive `BSTAR` (drag term). Uncertainty is at least a factor of 2.\n"
         "- **Risk score:** weighted blend of perigee, decay time, inclination and object type; weights are adjustable above.\n"
         "- **Footprint:** latitude band ±min(i, 180−i); time per latitude from sin φ = sin i · sin u.\n"
-        "- **Conjunctions:** coarse-grid SGP4 screening with 0.5 s refinement of local minima.\n"
+        "- **Conjunctions:** coarse-grid SGP4 screening with 0.5 s refinement of local minima, against debris, satellites or both.\n"
         "- **Debris and triage:** the debris groups (TLE or CelesTrak JSON files in data/debris) are parsed into the same record format and screened with the same SGP4 conjunction code. "
         "Avoidance cost: tangential burn displacement from Clohessy-Wiltshire (best/worst case for the unknown miss direction), propellant from the rocket equation. "
         "Altitude bands are the densest ranges of the active catalogue, found from the data.\n"

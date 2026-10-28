@@ -58,6 +58,33 @@ def screen_debris_vs_satellites(debris_obj: dict, catalogue: pd.DataFrame, recor
     return _screen(debris_obj, catalogue, catalogue[catalogue["source"] != "debris"], records, start_jd, hours, threshold_km)
 
 
+AGAINST = {
+    "debris": "Debris sets",
+    "active": "Active satellites",
+    "all": "Everything (satellites and debris)",
+}
+
+
+def screen_asset(asset: dict, catalogue: pd.DataFrame, records: dict, start_jd: float, hours: float = 48.0,
+                 threshold_km: float = 20.0, against: str = "debris", groups: list[str] | None = None):
+    """Closest passes of one object against debris, active satellites, or everything.
+
+    `groups` limits which debris groups count (None = all). Returns (events, candidates_screened).
+    """
+    if against not in AGAINST:
+        raise ValueError(f"against must be one of {sorted(AGAINST)}")
+    is_deb = catalogue["source"] == "debris"
+    if groups is not None and "GROUP" in catalogue:
+        is_deb = is_deb & catalogue["GROUP"].isin(groups)
+    if against == "debris":
+        cand = catalogue[is_deb]
+    elif against == "active":
+        cand = catalogue[catalogue["source"] != "debris"]
+    else:
+        cand = catalogue[(catalogue["source"] != "debris") | is_deb]
+    return _screen(asset, catalogue, cand, records, start_jd, hours, threshold_km)
+
+
 # ------------------------------------------------------------ altitude bands for the end-of-life view
 
 def altitude_bands(catalogue: pd.DataFrame, bin_km: float = 20.0, min_objects: int = 150) -> list[dict]:
@@ -145,14 +172,15 @@ def _events_summary(events: pd.DataFrame, limit: int = 5) -> list[dict]:
 
 
 def asset_facts(asset_facts_dict: dict, events: pd.DataFrame, n_candidates: int, hours: float, threshold_km: float,
-                start_utc: str, plan: pd.DataFrame, plan_inputs: dict, chosen: dict | None) -> dict:
-    """Decision-brief facts for 'protect this satellite from debris'. All numbers come from this app's code."""
+                start_utc: str, plan: pd.DataFrame, plan_inputs: dict, chosen: dict | None,
+                against: str = "the debris sets") -> dict:
+    """Decision-brief facts for one object's close-approach screening. All numbers come from this app's code."""
     facts = {
-        "situation": "Screening one satellite against the Fengyun-1C breakup debris set",
+        "situation": f"Screening one object for close approaches against {against}",
         "asset": asset_facts_dict,
         "screening": {
             "window_start_utc": start_utc, "window_hours": hours, "report_within_km": threshold_km,
-            "debris_objects_in_similar_altitude_band": n_candidates,
+            "objects_screened_in_similar_altitude_band": n_candidates,
             "passes_within_threshold": int(len(events)),
             "closest_passes": _events_summary(events) if len(events) else [],
         },

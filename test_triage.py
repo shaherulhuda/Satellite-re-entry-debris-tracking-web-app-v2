@@ -128,3 +128,22 @@ def test_memo_facts_are_json_serialisable(world):
     row = cat[cat["NORAD_CAT_ID"] == d].iloc[0]
     cr = triage.band_crossings(float(decay.mean_altitude_km(row.MEAN_MOTION)), float(row.decay_km_day), triage.altitude_bands(cat))
     json.dumps(triage.eol_facts(llm.object_facts(ctx, d, include_position=False), cr, ev, n, 24, 60, "t", triage.altitude_bands(cat)))
+
+
+def test_screen_asset_against_modes(world):
+    cat, recs = world
+    iss = recs[25544]
+    s = triage.conjunction.to_satrec(iss)
+    start = s.jdsatepoch + s.jdsatepochF
+    deb_ev, n_deb = triage.screen_asset(iss, cat, recs, start, hours=2, threshold_km=100, against="debris")
+    act_ev, n_act = triage.screen_asset(iss, cat, recs, start, hours=2, threshold_km=100, against="active")
+    all_ev, n_all = triage.screen_asset(iss, cat, recs, start, hours=2, threshold_km=100, against="all")
+    assert n_all == n_deb + n_act
+    src = dict(zip(cat["NORAD_CAT_ID"], cat["source"]))
+    assert all(src[i] == "debris" for i in deb_ev["norad_id"]) and all(src[i] == "active" for i in act_ev["norad_id"])
+    assert len(all_ev) == len(deb_ev) + len(act_ev)
+    groups = sorted(cat.loc[cat.source == "debris", "GROUP"].dropna().unique())
+    _, n_one = triage.screen_asset(iss, cat, recs, start, hours=1, threshold_km=50, against="debris", groups=groups[:1])
+    assert n_one <= n_deb
+    with pytest.raises(ValueError):
+        triage.screen_asset(iss, cat, recs, start, against="nope")
