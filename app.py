@@ -465,6 +465,15 @@ st.markdown(
         background: url(__ICON__) center / cover no-repeat; box-shadow: 0 2px 10px rgba(0,0,0,.35); }
     .st-key-ai_fab button > * { display: none; }
     .st-key-ai_fab { touch-action: none; cursor: grab; }
+    /* loading indicator: Streamlit's running man becomes a small planet with a moving orbit */
+    [data-testid="stStatusWidgetRunningIcon"] { position: relative; width: 1.6rem; height: 1.6rem; }
+    [data-testid="stStatusWidgetRunningIcon"] svg { display: none; }
+    [data-testid="stStatusWidgetRunningIcon"]::before { content: ""; position: absolute; inset: 0.5rem; border-radius: 50%;
+        background: radial-gradient(circle at 35% 30%, #5FE0C8, #14456B); }
+    [data-testid="stStatusWidgetRunningIcon"]::after { content: ""; position: absolute; inset: 0; border-radius: 50%;
+        border: 1.5px solid rgba(79, 209, 224, .55); box-sizing: border-box; animation: orbisk-orbit 1.2s linear infinite;
+        background: radial-gradient(circle at 50% 0, #FF7A3D 0 2.6px, transparent 3.2px); }
+    @keyframes orbisk-orbit { to { transform: rotate(360deg); } }
     [data-testid="stPopoverBody"] { width: min(520px, 92vw); max-height: calc(100vh - 8rem); overflow-y: auto; }
     </style>""".replace("__ICON__", _data_uri("orbisk-icon.png")),
     unsafe_allow_html=True,
