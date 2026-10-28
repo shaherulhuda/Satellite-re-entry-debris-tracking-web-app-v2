@@ -32,3 +32,17 @@ def test_globe_html_has_a_toggle_only_when_debris_is_given():
     without = globe.orbit_html(paths)
     assert "Debris orbits" in with_deb and 'id="deb"' in with_deb and '"count":20' in with_deb.replace(" ", "")
     assert '"deb":null' in without.replace(" ", "")
+
+
+def test_globe_conjunction_markers_and_cyan_tier():
+    import json
+    import re
+    import numpy as np
+    import globe
+    path = {"x": np.array([7000.0, 0, -7000, 0]), "y": np.array([0, 7000.0, 0, -7000]), "z": np.zeros(4), "period_s": 5400.0,
+            "name": "A", "tier": 3}
+    html = globe.orbit_html([path], events=[{"x": 7000.0, "y": 0.0, "z": 0.0, "tier": 0, "hover": "B<br>1.0 km"}])
+    ev = json.loads(re.search(r'"ev":(\{.*?\})', html).group(1))
+    assert ev["x"] == [7000.0] and ev["idx"] >= 2
+    assert "#4fd1e0" in html and "1.0 km" in html
+    assert '"ev":null' in globe.orbit_html([path])

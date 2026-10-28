@@ -348,6 +348,36 @@ def events_table(ev: pd.DataFrame) -> pd.DataFrame:
     })
 
 
+@st.cache_data(ttl=300, show_spinner=False)
+def conjunction_view_html(asset: int, partners: tuple, tcas: tuple, misses: tuple, start: str) -> str:
+    """Globe with the screened satellite's orbit (cyan), each close partner's orbit and a marker where the pass happens.
+    Orbit and marker colours follow the miss-distance bands of the cards."""
+    from sgp4.api import jday
+    t0 = orbits.TS.utc(*pd.Timestamp(start).timetuple()[:6])
+    theta = np.radians(t0.gmst * 15.0) % (2 * np.pi)
+    c, s = np.cos(theta), np.sin(theta)
+    tier_of = lambda miss: 0 if miss < 5 else (1 if miss < 15 else 2)
+    paths = []
+    for nid, tier in [(asset, 3)] + [(p, tier_of(m)) for p, m in zip(partners, misses)]:
+        try:
+            p = orbits.orbit_path_xyz(records[int(nid)], n_points=180, start=t0)
+        except Exception:
+            continue
+        p["name"], p["tier"] = records[int(nid)]["OBJECT_NAME"], tier
+        p["hover"] = records[int(nid)]["OBJECT_NAME"]
+        paths.append(p)
+    sat = conjunction.to_satrec(records[int(asset)])
+    events = []
+    for nid, tca, miss in zip(partners, tcas, misses):
+        whole = np.floor(tca - 0.5) + 0.5  # sgp4 wants the Julian date split into day and fraction
+        e, r, _ = sat.sgp4(float(whole), float(tca - whole))
+        if e != 0:
+            continue
+        events.append({"x": r[0] * c + r[1] * s, "y": -r[0] * s + r[1] * c, "z": r[2], "tier": tier_of(miss),
+                       "hover": f"{records[int(nid)]['OBJECT_NAME']}<br>{miss:.2f} km at {fmt_utc(tca)} UTC"})
+    return globe.orbit_html(paths, height=560, events=events)
+
+
 def miss_band(miss_km: float) -> tuple[str, str]:
     """(label, colour) for a miss distance: red under 5 km, yellow under 15 km, green otherwise."""
     if miss_km < 5:
@@ -419,6 +449,11 @@ with tab_triage:
                         unsafe_allow_html=True)
             if len(ev) > len(closest):
                 st.caption(f"Showing the {len(closest)} closest of {len(ev)} passes; all of them are in the table below.")
+            st.markdown("**Orbit view**")
+            components.html(conjunction_view_html(int(res["asset"]), tuple(int(n) for n in closest["norad_id"]),
+                                                  tuple(float(j) for j in closest["tca_jd"]),
+                                                  tuple(float(m) for m in closest["miss_km"]), res["start"]), height=570)
+            st.caption("Cyan: the screened satellite. ◆ marks each pass, coloured like the cards.")
             st.dataframe(table_ev, width="stretch", hide_index=True, column_config=EVENT_CONFIG)
             st.download_button("Download CSV", data=table_ev.to_csv(index=False).encode("utf-8"),
                                file_name=f"orbisk_conjunctions_{res['asset']}.csv", mime="text/csv", key="tri_csv")

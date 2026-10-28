@@ -17,7 +17,7 @@ from orbits import EARTH_RADIUS_KM as R
 
 DATA = Path(__file__).with_name("data")
 BG = "#05070d"
-TIER_COLORS = ("#e5484d", "#f5c518", "#30a46c")  # red, yellow, green
+TIER_COLORS = ("#e5484d", "#f5c518", "#30a46c", "#4fd1e0")  # red, yellow, green, cyan (the screened object)
 
 
 @lru_cache(maxsize=1)
@@ -89,6 +89,7 @@ _JS = """
   const gd = document.getElementById('globe');
   const WE = 7.2921159e-5;               // Earth rotation rate, rad/s
   const LINE = D.lineIdx, MARK = D.markIdx;
+  const EV = D.ev || null;               // optional conjunction markers
   const DEB = D.deb || null;             // optional debris layer (lines + moving dots), can be switched off
   let showDeb = !!DEB, forceDebLines = true, lastDebLines = -1e9;
   if (DEB) { const tr = gd.data[DEB.lineIdx]; DEB.X = tr.x; DEB.Y = tr.y; DEB.Z = tr.z; }
@@ -135,6 +136,11 @@ _JS = """
       mx.push(x * c + y * sn); my.push(-x * sn + y * c); mz.push(o.z[i] + u * (o.z[i + 1] - o.z[i]));
     }
     const idx = [LINE, MARK], ux = [lx, mx], uy = [ly, my], uz = [D.Z, mz];
+    if (EV) {                            // conjunction points: fixed in space, so they turn with the orbit lines
+      const ex = [], ey = [];
+      for (let i = 0; i < EV.x.length; i++) { ex.push(EV.x[i] * c + EV.y[i] * sn); ey.push(-EV.x[i] * sn + EV.y[i] * c); }
+      idx.push(EV.idx); ux.push(ex); uy.push(ey); uz.push(EV.z);
+    }
     if (DEB && showDeb) {                // moving debris dots: every frame
       const dx = [], dy = [], dz = [];
       for (const o of DEB.sats) {
@@ -186,9 +192,11 @@ def _int_or_null(a):
 
 
 def orbit_html(paths: list[dict], height: int = 650, highlight: bool = False, spin: bool = True,
-               debris: list[dict] | None = None) -> str:
+               debris: list[dict] | None = None, events: list[dict] | None = None) -> str:
     """paths: dicts with name, x, y, z (one period, Earth-fixed-at-start km), period_s, optional hover and
-    optional `tier` (0 red, 1 yellow, 2 green; colours every orbit and dot when all paths have one).
+    optional `tier` (0 red, 1 yellow, 2 green, 3 cyan; colours every orbit and dot when all paths have one).
+
+    `events` marks conjunction points: dicts with x, y, z (km, same axes as the paths), `tier` and `hover`.
 
     `debris` (same format, many objects) adds a toggleable layer of thin orbit lines and moving dots.
     Returns HTML for st.components.v1.html. The animation loops until paused.
@@ -201,16 +209,25 @@ def orbit_html(paths: list[dict], height: int = 650, highlight: bool = False, sp
         Z += _nan_to_null(p["z"]) + [None]
         line_tier += [p.get("tier", 1)] * (len(p["x"]) + 1)
     tiered = bool(paths) and all("tier" in p for p in paths)  # 0 red, 1 yellow, 2 green
-    scale = [[0, TIER_COLORS[0]], [0.5, TIER_COLORS[1]], [1, TIER_COLORS[2]]]
-    line_style = (dict(width=2, color=line_tier, colorscale=scale, cmin=0, cmax=2) if tiered else
+    scale = [[0, TIER_COLORS[0]], [1 / 3, TIER_COLORS[1]], [2 / 3, TIER_COLORS[2]], [1, TIER_COLORS[3]]]
+    line_style = (dict(width=2, color=line_tier, colorscale=scale, cmin=0, cmax=3) if tiered else
                   dict(width=5 if highlight else 2, color="#ff5a5f" if highlight else "rgba(255,179,71,0.6)"))
-    marker_style = (dict(size=4, color=[p["tier"] for p in paths], colorscale=scale, cmin=0, cmax=2) if tiered else
+    marker_style = (dict(size=4, color=[p["tier"] for p in paths], colorscale=scale, cmin=0, cmax=3) if tiered else
                     dict(size=7 if highlight else 3.5, color="#ffd23f"))
     fig.add_trace(go.Scatter3d(x=X, y=Y, z=Z, mode="lines", hoverinfo="skip", showlegend=False, line=line_style))
     fig.add_trace(go.Scatter3d(
         x=[0] * len(paths), y=[0] * len(paths), z=[0] * len(paths), mode="markers", showlegend=False,
         marker=marker_style, hovertext=[p.get("hover", p["name"]) for p in paths], hoverinfo="text"))
     line_idx, mark_idx = len(fig.data) - 2, len(fig.data) - 1
+    ev_data = None
+    if events:
+        fig.add_trace(go.Scatter3d(
+            x=[e["x"] for e in events], y=[e["y"] for e in events], z=[e["z"] for e in events], mode="markers",
+            showlegend=False, hovertext=[e["hover"] for e in events], hoverinfo="text",
+            marker=dict(size=7, symbol="diamond", color=[e["tier"] for e in events], colorscale=scale, cmin=0, cmax=3,
+                        line=dict(width=1, color="#ffffff"))))
+        ev_data = {"idx": len(fig.data) - 1, "x": [float(e["x"]) for e in events], "y": [float(e["y"]) for e in events],
+                   "z": [float(e["z"]) for e in events]}
     deb_data = None
     if debris:
         DX, DY, DZ, sats = [], [], [], []
@@ -234,7 +251,7 @@ def orbit_html(paths: list[dict], height: int = 650, highlight: bool = False, sp
                    camera=dict(eye=dict(x=eye[0], y=eye[1], z=eye[2]))))
     data = {
         "X": X, "Y": Y, "Z": Z, "eye": eye, "spin": spin,
-        "lineIdx": line_idx, "markIdx": mark_idx, "deb": deb_data,
+        "lineIdx": line_idx, "markIdx": mark_idx, "deb": deb_data, "ev": ev_data,
         "sats": [{"x": _nan_to_null(p["x"]), "y": _nan_to_null(p["y"]), "z": _nan_to_null(p["z"]),
                   "T": p["period_s"]} for p in paths],
     }
