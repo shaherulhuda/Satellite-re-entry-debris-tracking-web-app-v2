@@ -258,27 +258,6 @@ with tab_track:
     level = decay.traffic_light(sats["risk"]).loc[row.name]
     comp_row = components_df.loc[row.name]
 
-    # ---- summary card
-    with st.container(border=True):
-        h1, h2 = st.columns([4, 1])
-        h1.markdown(f"### {name}")
-        h1.caption(f"NORAD ID {int(norad)} · {row['type'].capitalize()}")
-        h2.badge({"red": "High risk", "yellow": "Medium risk", "green": "Low risk"}[level],
-                 color={"red": "red", "yellow": "orange", "green": "green"}[level])
-        s1, s2, s3, s4 = st.columns(4)
-        s1.metric("Risk score", f"{row['risk']:.0f} / 100")
-        s2.metric("Est. time to re-entry", decay.format_days(row["decay_days"]))
-        s3.metric("Rough range", decay.format_range(row["decay_days_low"], row["decay_days_high"]))
-        if bool(row.get("ca_screened", False)) and pd.notna(row.get("ca_miss_km")):
-            s4.metric("Closest approach", f"{row['ca_miss_km']:.2f} km",
-                      help=f"With {row['ca_with']}, {row['ca_hours']:.1f} h after the snapshot, at {row['ca_speed_km_s']:.1f} km/s.")
-        else:
-            s4.metric("Closest approach", "—", help="Not screened, or no approach inside the threshold.")
-        if st.button("Screen this object", key="screen_this", type="primary",
-                     help="Opens Conjunctions & Triage with this object selected."):
-            st.session_state["tri_obj"] = int(norad)
-            switch_target = "Conjunctions & Triage"
-
     t_orbit, t_decay, t_foot, t_risk_bd = st.tabs(["Orbit", "Decay", "Re-entry footprint", "Risk breakdown"])
 
     try:
@@ -301,6 +280,27 @@ with tab_track:
             path = orbits.orbit_path_xyz(record, n_points=360)
             path["name"] = name
             components.html(globe.orbit_html([path], height=600, highlight=True), height=610)
+
+        # ---- summary card (below the globe)
+        with st.container(border=True):
+            h1, h2 = st.columns([4, 1])
+            h1.markdown(f"### {name}")
+            h1.caption(f"NORAD ID {int(norad)} · {row['type'].capitalize()}")
+            h2.badge({"red": "High risk", "yellow": "Medium risk", "green": "Low risk"}[level],
+                     color={"red": "red", "yellow": "orange", "green": "green"}[level])
+            s1, s2, s3, s4 = st.columns(4)
+            s1.metric("Risk score", f"{row['risk']:.0f} / 100")
+            s2.metric("Est. time to re-entry", decay.format_days(row["decay_days"]))
+            s3.metric("Rough range", decay.format_range(row["decay_days_low"], row["decay_days_high"]))
+            if bool(row.get("ca_screened", False)) and pd.notna(row.get("ca_miss_km")):
+                s4.metric("Closest approach", f"{row['ca_miss_km']:.2f} km",
+                          help=f"With {row['ca_with']}, {row['ca_hours']:.1f} h after the snapshot, at {row['ca_speed_km_s']:.1f} km/s.")
+            else:
+                s4.metric("Closest approach", "—", help="Not screened, or no approach inside the threshold.")
+            if st.button("Screen this object", key="screen_this", type="primary",
+                         help="Opens Conjunctions & Triage with this object selected."):
+                st.session_state["tri_obj"] = int(norad)
+                switch_target = "Conjunctions & Triage"
 
     with t_decay:
         h0 = float(decay.mean_altitude_km(row["MEAN_MOTION"]))
