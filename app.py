@@ -138,9 +138,9 @@ h4 { font-size: 1.2rem !important; }
     background: radial-gradient(circle at 50% 0, #4FD1E0 0 4px, transparent 5px); }
 .orbisk-cover .ring.r3 { width: 320px; height: 320px; border-style: dashed; border-color: rgba(190, 215, 255, .16); animation-duration: 28s;
     background: radial-gradient(circle at 50% 0, #ffffff 0 3px, transparent 4px); }
-.orbisk-cover img.logo { height: 58px; width: auto; margin-bottom: 1.1rem; }
+.orbisk-cover img.logo { height: 104px; width: auto; margin: -.4rem 0 1rem -.6rem; }
 .orbisk-cover h1 { font-size: clamp(1.7rem, 3.3vw, 2.5rem); line-height: 1.2; margin: 0 0 .9rem; padding: 0; font-weight: 700; letter-spacing: -.01em;
-    text-shadow: 0 0 30px rgba(79, 209, 224, .25); }
+    color: #FF7A3D; text-shadow: 0 0 28px rgba(255, 122, 61, .35); }
 .orbisk-cover h1 a { display: none; }  /* Streamlit's heading anchor icon */
 .orbisk-cover .lead { font-size: 1.08rem; line-height: 1.55; color: rgba(232, 238, 252, .82); margin: 0; }
 .orbisk-cover .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; text-align: left; margin-bottom: 1.8rem; }
@@ -192,8 +192,8 @@ if not entered:
         'and screens them for close approaches with other satellites and space debris.</p></div>'
         '<div class="hero"><i class="orbit ring r3"></i><i class="orbit ring r2"></i><i class="orbit ring r1"></i><i class="orbit planet"></i></div></div>'
         '<div class="cards">'
-        '<div class="ccard"><b>🛰️ Watchlist</b><p>The 50 highest-risk satellites, ranked and colour-coded: 10 red, 30 yellow, 10 green. Pick one to dig in.</p></div>'
-        '<div class="ccard"><b>📉 Re-entry Tracker</b><p>See an orbit in 3D, how fast it is decaying, and the latitudes it can come down over.</p></div>'
+        '<div class="ccard"><b>🛰️ Watchlist</b><p>The 50 highest-risk satellites, ranked and colour-coded: 10 red, 30 yellow, 10 green. See their orbits in 3D and pick one to dig in.</p></div>'
+        '<div class="ccard"><b>📉 Re-entry Tracker</b><p>Follow one satellite: where it is now, how fast it is decaying, and the latitudes it can come down over.</p></div>'
         '<div class="ccard"><b>⚠️ Conjunctions &amp; Triage</b><p>Screen one satellite against every other satellite and debris fragment for close passes in the next 1 to 30 days.</p></div>'
         '</div></div>',
         unsafe_allow_html=True,
