@@ -200,3 +200,14 @@ def test_assistant_allows_ten_questions_per_session(monkeypatch):
     assert len(seen) == 1 and at.session_state["ai_requests"] == 10
     at.chat_input[0].set_value("one more?").run()  # the eleventh is refused and never reaches the model
     assert len(seen) == 1 and any("used all 10 assistant questions" in e.value for e in at.error)
+
+
+def test_screen_this_object_runs_the_screening():
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file("app.py", default_timeout=600).run()
+    assert not at.exception
+    assert not any("Closest passes" in m.value for m in at.markdown)  # nothing screened yet
+    at.button(key="screen_this").click().run()
+    assert not at.exception
+    assert any("Closest passes" in m.value for m in at.markdown)  # results are shown without pressing Run screening
+    assert at.session_state["tri_asset"]["asset"] == int(at.selectbox(key="tri_obj").value)

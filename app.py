@@ -365,6 +365,7 @@ with tab_watch:
                 switch_targets = ["Re-entry Tracker", "Re-entry footprint"]
             else:
                 st.session_state["tri_obj"] = picked_id
+                st.session_state["_auto_screen"] = True
                 switch_targets = ["Conjunctions & Triage"]
     st.download_button("Download CSV", data=table.assign(**{"NORAD ID": top["NORAD_CAT_ID"].astype(int)})
                        .assign(Level=levels.map({"red": "High", "yellow": "Medium", "green": "Low"}))
@@ -426,8 +427,9 @@ with tab_track:
             else:
                 s4.metric("Closest approach", "—", help="Not screened, or no approach inside the threshold.")
             if st.button("Screen this object", key="screen_this", type="primary",
-                         help="Opens Conjunctions & Triage with this object selected."):
+                         help="Opens Conjunctions & Triage and screens this object for close approaches."):
                 st.session_state["tri_obj"] = int(norad)
+                st.session_state["_auto_screen"] = True
                 switch_targets = ["Conjunctions & Triage"]
 
     with t_decay:
@@ -529,7 +531,7 @@ with tab_triage:
         hours = days * 24
         thr = a3.slider("Report within (km)", 1, 100, 25)
         run = st.form_submit_button("Run screening", type="primary")
-    if run:
+    if run or st.session_state.pop("_auto_screen", False):  # "Screen this object" / "Screen for close approaches" run it straight away
         jd0, ts0 = start_time("Snapshot time")
         with st.spinner("Propagating candidates…"):
             try:
