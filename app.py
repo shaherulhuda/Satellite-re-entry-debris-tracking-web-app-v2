@@ -194,7 +194,7 @@ if not entered:
         '<div class="cards">'
         '<div class="ccard"><b>🛰️ Watchlist</b><p>The 50 highest-risk satellites, ranked by risk. See their orbits in 3D and pick one to dig in.</p></div>'
         '<div class="ccard"><b>📉 Re-entry Tracker</b><p>Follow one satellite: where it is now, how fast it is decaying, and the latitudes it can come down over.</p></div>'
-        '<div class="ccard"><b>⚠️ Conjunctions &amp; Triage</b><p>Screen one satellite against every other satellite and debris fragment for close passes in the next 1 to 30 days.</p></div>'
+        '<div class="ccard"><b>⚠️ Screen close approaches</b><p>Check one satellite against every other satellite and debris fragment for close passes in the next 1 to 30 days.</p></div>'
         '</div></div>',
         unsafe_allow_html=True,
     )
@@ -274,7 +274,7 @@ st.session_state["_booted"] = True
 if not entered:
     st.stop()  # the cover has been shown while the data warmed up; nothing else is built until "Enter Watchlist"
 
-SEC_WATCH, SEC_TRACK, SEC_TRIAGE = "🛰️ Watchlist", "📉 Re-entry Tracker", "⚠️ Conjunctions & Triage"
+SEC_WATCH, SEC_TRACK, SEC_TRIAGE = "🛰️ Watchlist", "📉 Re-entry Tracker", "⚠️ Screen close approaches"
 VIEW_ORBIT, VIEW_DECAY, VIEW_FOOT = "Orbit", "Decay", "Re-entry footprint"
 
 
@@ -570,7 +570,7 @@ def tracker_view():
             else:
                 s4.metric("Closest approach", "—", help="Not screened, or no approach inside the threshold.")
             if st.button("Screen this object", key="screen_this", type="primary",
-                         help="Opens Conjunctions & Triage and screens this object for close approaches."):
+                         help="Opens Screen close approaches and runs the screening for this object."):
                 go_to(SEC_TRIAGE, obj=int(norad), auto=True)
 
     elif view == VIEW_DECAY:
@@ -667,7 +667,7 @@ def triage_view():
     if picks:
         st.session_state["tri_obj"] = picks["obj"]
     auto = bool(picks and picks.get("auto"))  # those buttons run the screening straight away
-    st.subheader("Conjunctions & triage")
+    st.subheader("Screen close approaches")
     st.markdown("Pick a satellite, a time window and a distance; Orbisk lists the closest passes.")
     asset_ids = ids  # the 50 highest-risk active satellites, same as the watchlist
     with st.form("tri_asset_form"):
@@ -725,7 +725,7 @@ def triage_view():
             st.caption("Cyan: the screened satellite. ◆ marks each pass, coloured like the cards.")
             st.dataframe(table_ev, width="stretch", hide_index=True, column_config=EVENT_CONFIG)
             st.download_button("Download CSV", data=table_ev.to_csv(index=False).encode("utf-8"),
-                               file_name=f"orbisk_conjunctions_{res['asset']}.csv", mime="text/csv", key="tri_csv")
+                               file_name=f"orbisk_close_approaches_{res['asset']}.csv", mime="text/csv", key="tri_csv")
 
 # only the section on screen is built
 if section == SEC_WATCH:
@@ -856,12 +856,12 @@ with st.expander("How these numbers are computed"):
         "- **Colour levels:** by risk rank among the active satellites: the 10 highest-risk are red, the next 30 yellow, all others green "
         "(the watchlist draws on the 50 highest-risk satellites, so all 50 show 10 / 30 / 10; fewer are the first N of them in the chosen order). Debris is not on the watchlist; it can be drawn on the globe.\n"
         "- **Footprint:** latitude band ±min(i, 180−i); time per latitude from sin φ = sin i · sin u.\n"
-        "- **Conjunctions:** coarse-grid SGP4 screening with 0.5 s refinement of local minima, against every satellite and debris fragment.\n"
+        "- **Close approaches:** coarse-grid SGP4 screening with 0.5 s refinement of local minima, against every satellite and debris fragment.\n"
         "- **Scope:** low Earth orbit (LEO) only: the watchlist, tracker, screening and assistant cover active satellites with a mean altitude and perigee below 2,000 km. "
         "Objects in higher orbits are not listed (a higher orbit that crosses LEO still counts as a close-approach partner).\n"
         "- **Debris:** the debris groups (TLE or CelesTrak JSON files in data/debris) are parsed into the same record format. They are not on the watchlist "
         "or in the pickers; they are only drawn as orbits on the Watchlist globe and used as close-approach partners when an active satellite is screened "
-        "(Conjunctions & Triage, and the close-approach terms of the risk score). Altitude and risk figures are for active satellites only."
+        "(Screen close approaches, and the close-approach terms of the risk score). Altitude and risk figures are for active satellites only."
         "Altitude bands are the densest ranges of the active catalogue, found from the data.\n"
         "- **Assistant (optional):** off unless an API key is supplied. The model only receives numbers computed above, or calls the app's own lookup functions; it never computes orbits.\n"
         "- **Limits:** one element set per object (no history until snapshots are added), mean elements are only km-accurate, "

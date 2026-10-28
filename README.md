@@ -17,14 +17,14 @@ access code and `ASSISTANT_MAX_REQUESTS` (default 10) to cap questions per sessi
 
 ## Debris data and scope
 
-The app is **low Earth orbit only**: the Watchlist, Re-entry Tracker and Conjunctions & Triage tabs (and the assistant) cover **active satellites from `active.json` with mean altitude and perigee below 2,000 km**. Higher orbits (GEO/MEO) are never listed but still count as screening partners. The Re-entry Tracker and screening pickers list those same 50 highest-risk satellites. The Watchlist draws on them; the **Rank by** dropdown orders them and **Objects** shows the first N of that order (10 to 50).
+The app is **low Earth orbit only**: the Watchlist, Re-entry Tracker and Screen close approaches sections (and the assistant) cover **active satellites from `active.json` with mean altitude and perigee below 2,000 km**. Higher orbits (GEO/MEO) are never listed but still count as screening partners. The Re-entry Tracker and screening pickers list those same 50 highest-risk satellites. The Watchlist draws on them; the **Rank by** dropdown orders them and **Objects** shows the first N of that order (10 to 50).
 Debris (`data/debris/`: Fengyun-1C, Iridium-33, Cosmos-2251; CelesTrak JSON or 3-line TLE, parsed by `debris.py`) is used in two ways:
 
 - **Orbital view:** the Watchlist globe can draw debris orbits (the **Debris** box; 0 = hidden).
-- **Close approaches:** when an active satellite is screened (Conjunctions & Triage, and the close-approach terms of the risk score),
+- **Close approaches:** when an active satellite is screened (Screen close approaches, and the close-approach terms of the risk score),
   every other satellite and every debris fragment is a possible partner.
 
-**Conjunctions & Triage:** pick an active satellite, a window of 1 to 30 days and a distance threshold; the closest passes
+**Screen close approaches:** pick an active satellite, a window of 1 to 30 days and a distance threshold; the closest passes
 against every satellite and debris fragment are listed. Screening uses mean elements and gives no collision probability, so
 results are triage estimates, not operational decisions. Avoidance-cost maths (`maneuver.py`) and the memo prompt (`llm.py`)
 are kept in the code for the AI assistant to use later.
@@ -60,6 +60,6 @@ the highest-risk objects (default 300) into `data/closest_approaches.json`. Re-r
   `enableStaticServing`), which the browser caches. If that file cannot be served, the same version is fetched from the Plotly CDN.
   `test_debris_globe.py` checks the file matches the pinned `plotly` version, so update it when you bump Plotly:
   `cp $(python -c "import plotly,os;print(os.path.dirname(plotly.__file__))")/package_data/plotly.min.js static/`.
-- **One section at a time.** The Watchlist, Re-entry Tracker and Conjunctions & Triage sections are separate fragments; only the one on
+- **One section at a time.** The Watchlist, Re-entry Tracker and Screen close approaches sections are separate fragments; only the one on
   screen is built, and interacting inside it reruns just that fragment. The assistant is its own fragment too.
 - Finished globes are cached for 5 minutes per set of objects.

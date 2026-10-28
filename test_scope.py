@@ -10,7 +10,7 @@ import dataset
 import decay
 import llm
 
-SEC_TRACK, SEC_TRIAGE = "📉 Re-entry Tracker", "⚠️ Conjunctions & Triage"
+SEC_TRACK, SEC_TRIAGE = "📉 Re-entry Tracker", "⚠️ Screen close approaches"
 
 
 def open_app(timeout=400, entered=True):
@@ -125,7 +125,7 @@ def test_object_page_card_subtabs_and_screen_button():
     assert not at.exception
     at.button(key="screen_this").click().run()
     assert not at.exception
-    assert at.session_state["section"] == SEC_TRIAGE  # moved to Conjunctions & Triage with the object selected
+    assert at.session_state["section"] == SEC_TRIAGE  # moved to Screen close approaches with the object selected
     assert str(at.session_state["tri_obj"]) == re.search(r"\((\d+)\)$", target).group(1)
     assert str(at.selectbox(key="tri_obj").value) == re.search(r"\((\d+)\)$", target).group(1)
 
