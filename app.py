@@ -276,14 +276,19 @@ with tab_track:
             st.session_state["tri_obj"] = int(norad)
             switch_target = "Conjunctions & Triage"
 
-    t_orbit, t_decay, t_foot, t_risk_bd = st.tabs(["Orbit", "Decay", "Footprint", "Risk breakdown"])
+    t_orbit, t_decay, t_foot, t_risk_bd = st.tabs(["Orbit", "Decay", "Re-entry footprint", "Risk breakdown"])
+
+    try:
+        pos = orbits.current_position(record)
+        track = orbits.ground_track(record, n_orbits=3)
+        propagate_error = None
+    except Exception as exc:  # e.g. decayed / bad elements
+        pos = track = None
+        propagate_error = exc
 
     with t_orbit:
-        try:
-            pos = orbits.current_position(record)
-            track = orbits.ground_track(record, n_orbits=3)
-        except Exception as exc:  # e.g. decayed / bad elements
-            st.error(f"Could not propagate {name}: {exc}")
+        if propagate_error is not None:
+            st.error(f"Could not propagate {name}: {propagate_error}")
         else:
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Latitude", f"{pos['lat']:.2f}°")
@@ -293,9 +298,6 @@ with tab_track:
             path = orbits.orbit_path_xyz(record, n_points=360)
             path["name"] = name
             components.html(globe.orbit_html([path], height=600, highlight=True), height=610)
-
-            st.markdown("**Ground track** (next 3 orbits)")
-            st.plotly_chart(globe.ground_track_figure(track, pos), width="stretch")
 
     with t_decay:
         h0 = float(decay.mean_altitude_km(row["MEAN_MOTION"]))
@@ -316,6 +318,9 @@ with tab_track:
         f1.metric("Latitudes overflown", f"±{footprint.max_latitude(row['INCLINATION']):.1f}°")
         f2.metric("Share of Earth's surface", f"{footprint.surface_fraction(row['INCLINATION']) * 100:.0f}%")
         st.plotly_chart(charts.footprint_figure(float(row["INCLINATION"])), width="stretch")
+        if propagate_error is None:
+            st.markdown("**Ground track** (next 3 orbits)")
+            st.plotly_chart(globe.ground_track_figure(track, pos), width="stretch")
         st.caption("An object can only come down within the latitude band set by its inclination (red), and spends most of its time "
                    "near the band's edges (right). Where it actually re-enters depends on the final orbits and cannot be "
                    "predicted days ahead; this shows where it *can* pass, not where it *will* land.")

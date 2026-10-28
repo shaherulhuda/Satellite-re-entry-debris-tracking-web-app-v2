@@ -100,8 +100,8 @@ def test_object_page_card_subtabs_and_screen_button():
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file("app.py", default_timeout=400).run()
     assert not at.exception
-    assert [t.label for t in at.tabs if t.label in ("Orbit", "Decay", "Footprint", "Risk breakdown")] == \
-        ["Orbit", "Decay", "Footprint", "Risk breakdown"]
+    assert [t.label for t in at.tabs if t.label in ("Orbit", "Decay", "Re-entry footprint", "Risk breakdown")] == \
+        ["Orbit", "Decay", "Re-entry footprint", "Risk breakdown"]
     assert any(m.label == "Risk score" for m in at.metric)  # summary card
     pick = at.selectbox(key="tracker_obj")
     target = pick.options[3]  # option strings look like "NAME (12345)"
