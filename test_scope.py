@@ -303,3 +303,14 @@ def test_no_how_these_numbers_are_computed_box():
         at.run()
         assert not at.exception
         assert not [e for e in at.expander if "How these numbers" in str(e.label)]
+
+
+def test_csv_download_is_only_the_ticked_satellite():
+    at = open_app(400).run()
+    assert not at.exception
+    assert [b for b in at.get("download_button") if "Download CSV" == b.proto.label]  # nothing ticked: the whole table
+    at.session_state["watch_table_0"] = {"selection": {"rows": [2], "columns": [], "cells": []}}
+    at.run()
+    assert not at.exception
+    labels = [b.proto.label for b in at.get("download_button")]
+    assert "Download selected CSV" in labels and "Download CSV" not in labels

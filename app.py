@@ -506,10 +506,7 @@ def watchlist_view():
 
     shown_table = table.assign(**{"Risk score": [risk_bar(s, l) for s, l in zip(top["risk"], levels)]})
     _gap, c_dl = st.columns([6, 1.2])  # the CSV button sits at the top right of the table
-    c_dl.download_button("Download CSV", data=table.assign(**{"NORAD ID": top["NORAD_CAT_ID"].astype(int)})
-                         .assign(Level=levels.map({"red": "High", "yellow": "Medium", "green": "Low"}))
-                         .to_csv(index=False).encode("utf-8"),
-                         file_name="orbisk_watchlist.csv", mime="text/csv", width="stretch")
+    dl_slot = c_dl.empty()  # filled below, once the table has told us which row is ticked
     event = st.dataframe(
         shown_table, width="stretch", hide_index=True, key=f"watch_table_{st.session_state.get('_watch_gen', 0)}", on_select="rerun",
         selection_mode=["single-row", "single-cell"],  # click any cell (or tick the row) to open the object
@@ -522,6 +519,17 @@ def watchlist_view():
             "Risk score": st.column_config.ImageColumn("Risk score", width="medium"),
         },
     )
+    # CSV: only the ticked satellite when one is ticked, otherwise the whole table
+    ticked = sorted({r for r in event.selection.rows} | {c[0] for c in event.selection.cells if isinstance(c, (tuple, list))})
+    ticked = [r for r in ticked if r < len(top)]
+    csv_table = table.assign(**{"NORAD ID": top["NORAD_CAT_ID"].astype(int)}).assign(Level=levels.map({"red": "High", "yellow": "Medium", "green": "Low"}))
+    csv_name = "orbisk_watchlist.csv"
+    if ticked:
+        csv_table = csv_table.iloc[ticked]
+        csv_name = "orbisk_" + str(csv_table["Name"].iloc[0]).replace(" ", "_").replace("/", "-") + ".csv"
+    dl_slot.download_button("Download selected CSV" if ticked else "Download CSV", data=csv_table.to_csv(index=False).encode("utf-8"),
+                            file_name=csv_name, mime="text/csv", width="stretch",
+                            help="Only the ticked satellite is included." if ticked else "Tick a satellite in the table to download just that one.")
     # clicking a row (any cell, or its tick box) offers two next steps for that satellite
     picked = list(event.selection.rows) or [c[0] if isinstance(c, (tuple, list)) else c.get("row") for c in event.selection.cells]
     picked_id = table_ids[picked[0]] if picked and picked[0] < len(table_ids) else None
