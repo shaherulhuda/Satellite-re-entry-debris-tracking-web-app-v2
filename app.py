@@ -580,14 +580,11 @@ def tracker_view():
 
     elif view == VIEW_DECAY:
         h0 = float(decay.mean_altitude_km(row["MEAN_MOTION"]))
-        d1, d2, d3, d4 = st.columns(4)
+        d1, d2, d3 = st.columns(3)
         d1.metric("Est. time to re-entry", decay.format_days(row["decay_days"]))
         d2.metric("Rough range", decay.format_range(row["decay_days_low"], row["decay_days_high"]))
         d3.metric("Current decay rate", f"{row['decay_km_day']:.3f} km/day" if np.isfinite(row["decay_km_day"]) else "—")
-        h_obj = history.object_history(hist_all, int(norad))
-        obs = history.observed_decay_rate(h_obj)
-        d4.metric("Observed perigee trend", f"{obs:+.3f} km/day" if obs is not None else "n/a",
-                  help="Needs at least two recorded snapshots spanning a day or more.")
+        h_obj = history.object_history(hist_all, int(norad))  # recorded perigees, drawn on the chart below
         st.caption(f"Status: **{row['decay_status']}**. This is a rough estimate (typically good to a factor of 2 or worse), "
                    "not a re-entry prediction; it cannot anticipate solar activity changes or manoeuvres.")
         st.plotly_chart(charts.decay_figure(h0, float(row["decay_km_day"]), h_obj), width="stretch")

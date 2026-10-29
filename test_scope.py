@@ -282,3 +282,14 @@ def test_footer_download_button_and_no_repeated_heading():
         other.session_state["section"] = section
         other.run()
         assert any("orbisk-footer" in m.value for m in other.markdown)  # footer under every section
+
+
+def test_decay_view_has_no_observed_perigee_trend():
+    at = open_app(400)
+    at.session_state["section"] = SEC_TRACK
+    at.session_state["tracker_view"] = "Decay"
+    at.run()
+    assert not at.exception
+    labels = [m.label for m in at.metric]
+    assert "Est. time to re-entry" in labels and "Current decay rate" in labels
+    assert "Observed perigee trend" not in labels
