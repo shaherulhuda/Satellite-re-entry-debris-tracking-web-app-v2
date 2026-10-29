@@ -61,7 +61,11 @@ iframe { border-radius: 14px; }
 [data-testid="stButtonGroup"] button[role="radio"][data-selected="true"] p { color: #fff; font-weight: 600; }
 .st-key-tracker_view button[role="radio"] { padding: .25rem .8rem; }
 .st-key-tracker_view button[role="radio"] p { font-size: .85rem; }
-.st-key-section { margin-bottom: .4rem; }
+.st-key-section { margin-bottom: .6rem; }
+.st-key-section [role="radiogroup"] { flex-wrap: wrap; gap: .6rem; }
+.st-key-section button[role="radio"] { padding: .55rem 1.7rem; height: auto; min-height: 3.2rem; }  /* the three main features: bigger than the sub-views */
+.st-key-section button[role="radio"] p { font-size: 1.12rem; }
+.st-key-section [data-testid="stIconEmoji"] { font-size: 1.3rem; }
 
 /* scrollbars and tooltips */
 * { scrollbar-width: thin; scrollbar-color: rgba(79, 209, 224, .5) transparent; }
