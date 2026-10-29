@@ -111,7 +111,7 @@ iframe { border-radius: 14px; }
 .st-key-ai_fab button > * { display: none; }
 .st-key-ai_fab::after { content: "Ask Orbisk AI"; position: absolute; top: calc(100% + 2px); left: 50%; transform: translateX(-50%);
     white-space: nowrap; padding: 4px 14px; border-radius: 999px; font-size: .92rem; font-weight: 600; line-height: 1.3;
-    pointer-events: none; background: #ffffff; color: #0a0e1f; box-shadow: 0 1px 6px rgba(0,0,0,.35); }
+    background: #ffffff; color: #0a0e1f; box-shadow: 0 1px 6px rgba(0,0,0,.35); cursor: grab; }  /* part of the draggable area; a click on it opens the popup */
 .st-key-ai_fab:has(button[aria-expanded="true"])::after { display: none; }
 [data-testid="stPopoverBody"] { width: min(520px, 92vw); max-height: calc(100vh - 8rem); overflow-y: auto; }
 
@@ -898,6 +898,10 @@ if (!P.__orbiskDrag) {
   };
   restore();
   setTimeout(rescue, 1500); setTimeout(rescue, 5000);
+  D.addEventListener("click", (e) => {
+    const fab = e.target.closest(".st-key-ai_fab");
+    if (fab && !e.target.closest("button")) { const b = fab.querySelector("button"); if (b) b.click(); }  // a click on the label opens the popup
+  });
   D.addEventListener("dblclick", (e) => { if (e.target.closest(".st-key-ai_fab")) reset(); }, true);
   let drag = null;
   D.addEventListener("pointerdown", (e) => {
@@ -905,7 +909,10 @@ if (!P.__orbiskDrag) {
     if (!fab || e.button > 0) return;
     const r = fab.getBoundingClientRect();
     drag = {dx: e.clientX - r.left, dy: e.clientY - r.top, x0: e.clientX, y0: e.clientY, moved: false};
+    // the globes are iframes, which swallow the pointer events when the drag passes over them: switch them off while dragging
+    for (const f of D.querySelectorAll("iframe")) f.style.pointerEvents = "none";
   }, true);
+  const endDrag = () => { for (const f of D.querySelectorAll("iframe")) f.style.pointerEvents = ""; };
   D.addEventListener("pointermove", (e) => {
     if (!drag) return;
     if (!drag.moved && Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) < 6) return;
@@ -921,7 +928,10 @@ if (!P.__orbiskDrag) {
       setTimeout(() => D.removeEventListener("click", swallow, true), 300);
     }
     drag = null;
+    endDrag();
   }, true);
+  D.addEventListener("pointercancel", () => { drag = null; endDrag(); }, true);
+  P.addEventListener("blur", () => { drag = null; endDrag(); });
   // turning the "Show debris orbits" toggle off hides the debris in the globe straight away; the new page then
   // arrives after the (slow) rerun and keeps it hidden
   D.addEventListener("click", (e) => {
