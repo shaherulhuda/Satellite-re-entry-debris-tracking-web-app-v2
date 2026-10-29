@@ -97,3 +97,13 @@ def test_plotly_is_shared_not_inlined():
     packaged = Path(plotly.__file__).parent / "package_data" / "plotly.min.js"
     assert (Path(__file__).parent / "static" / "plotly.min.js").read_bytes() == packaged.read_bytes()  # static copy matches the pinned plotly
     assert "enableStaticServing = true" in (Path(__file__).parent / ".streamlit" / "config.toml").read_text()
+
+
+def test_globe_animation_does_not_fight_dragging():
+    import numpy as np
+    import globe
+    path = {"x": np.array([7000.0, 0, -7000, 0]), "y": np.array([0, 7000.0, 0, -7000]), "z": np.zeros(4), "period_s": 5400.0, "name": "A"}
+    html = globe.orbit_html([path], autoplay=True)
+    assert "if (dragging) return;" in html            # the animation holds while the globe is dragged
+    assert "Plotly.restyle(gd, upd, idx)" in html and "Plotly.update(gd, upd" not in html  # data-only updates, no layout work per frame
+    assert "now - lastFrame < 33" in html and "lineDue" in html  # ~30 fps, orbit lines redrawn less often than the dots

@@ -174,13 +174,20 @@ _JS = """
   gd.addEventListener('mouseleave', () => { active = false; });
   document.addEventListener('mouseleave', () => { active = false; });
 
-  function render(dt) {
+  let lastLine = -1e9, lastFrame = 0, dragging = false;
+  function render(dt, forceLine) {
+    const nowMs = performance.now();
     const th = WE * s, c = Math.cos(th), sn = Math.sin(th);
-    const lx = new Array(D.X.length), ly = new Array(D.X.length);
-    for (let i = 0; i < D.X.length; i++) {
-      const x = D.X[i], y = D.Y[i];
-      if (x === null) { lx[i] = null; ly[i] = null; continue; }
-      lx[i] = x * c + y * sn; ly[i] = -x * sn + y * c;
+    const lineDue = forceLine || nowMs - lastLine > 500;   // the orbit lines turn slowly: redraw them ~2x/s, the dots every frame
+    let lx, ly;
+    if (lineDue) {
+      lx = new Array(D.X.length); ly = new Array(D.X.length);
+      for (let i = 0; i < D.X.length; i++) {
+        const x = D.X[i], y = D.Y[i];
+        if (x === null) { lx[i] = null; ly[i] = null; continue; }
+        lx[i] = x * c + y * sn; ly[i] = -x * sn + y * c;
+      }
+      lastLine = nowMs;
     }
     const mx = [], my = [], mz = [];
     for (const o of D.sats) {
@@ -188,7 +195,8 @@ _JS = """
       const x = o.x[i] + u * (o.x[i + 1] - o.x[i]), y = o.y[i] + u * (o.y[i + 1] - o.y[i]);
       mx.push(x * c + y * sn); my.push(-x * sn + y * c); mz.push(o.z[i] + u * (o.z[i + 1] - o.z[i]));
     }
-    const idx = [LINE, MARK], ux = [lx, mx], uy = [ly, my], uz = [D.Z, mz];
+    const idx = [MARK], ux = [mx], uy = [my], uz = [mz];
+    if (lineDue) { idx.push(LINE); ux.push(lx); uy.push(ly); uz.push(D.Z); }
     if (EV) {                            // conjunction points: fixed in space, so they turn with the orbit lines
       const ex = [], ey = [];
       for (let i = 0; i < EV.x.length; i++) { ex.push(EV.x[i] * c + EV.y[i] * sn); ey.push(-EV.x[i] * sn + EV.y[i] * c); }
@@ -209,8 +217,8 @@ _JS = """
       phi += dt * 0.105;                  // ~6 degrees/s
       lay = {'scene.camera.eye': {x: rad * Math.cos(phi), y: rad * Math.sin(phi), z: ez}};
     }
-    Plotly.update(gd, upd, lay, idx);
-    const nowMs = performance.now();
+    Plotly.restyle(gd, upd, idx);          // data only: no layout work, so dragging the globe stays smooth
+    if (lay['scene.camera.eye']) Plotly.relayout(gd, lay);
     if (DEB && showDeb && (forceDebLines || nowMs - lastDebLines > 400)) {   // heavy: rotate all debris orbit lines ~2-3x/s
       const n = DEB.X.length, rx = new Array(n), ry = new Array(n);
       for (let i = 0; i < n; i++) {
@@ -225,16 +233,24 @@ _JS = """
     clk.textContent = '+' + String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
   }
 
+  gd.addEventListener('pointerdown', () => { dragging = true; });
+  const release = () => { dragging = false; last = null; };
+  window.addEventListener('pointerup', release); window.addEventListener('pointercancel', release);
+  window.addEventListener('blur', release);
+
   function tick(now) {
     requestAnimationFrame(tick);
     if (!playing) return;
+    if (dragging) return;                 // hold the animation while the globe is being dragged
+    if (now - lastFrame < 33) return;     // ~30 frames a second is plenty
+    lastFrame = now;
     if (last === null) last = now;
     const dt = Math.min((now - last) / 1000, 0.25);
     last = now;
     s += dt * speed;
     render(dt);
   }
-  render(0);
+  render(0, true);
   requestAnimationFrame(tick);
 })();
 """
