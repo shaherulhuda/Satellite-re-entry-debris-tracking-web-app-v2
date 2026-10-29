@@ -855,34 +855,6 @@ def assistant_view():
 
 assistant_view()
 
-with st.expander("How these numbers are computed"):
-    st.markdown(
-        "- **Perigee / apogee:** a from mean motion via Kepler's third law (n²a³ = μ); altitude = a(1∓e) − 6378.137 km.\n"
-        "- **Positions and orbits:** SGP4 (via skyfield) on the stored mean elements; the globe is drawn in Earth-fixed axes with the Earth rotating at its real rate.\n"
-        "- **Decay estimate:** the measured `MEAN_MOTION_DOT` (×2, since the field is ṅ/2) gives da/dt = −(2/3)·a·ṅ/n. "
-        "That rate is scaled by air density (exponential atmosphere table) and integrated down to 120 km. "
-        "Requires positive `BSTAR` (drag term). Uncertainty is at least a factor of 2.\n"
-        "- **Risk score (0-100):** fixed weighted blend of seven terms scaled 0-1: perigee 20% (150 km = 1, 700 km or more = 0), "
-        "decay time 20% (10 days or less = 1, 10 years or more = 0), inclination 10% (share of Earth's surface overflown), "
-        "object type 5% (debris 1.0, rocket body 0.8, payload 0.3), miss distance 25% (closest approach to any satellite or debris in 24 h "
-        "from the snapshot time: 1 km = 1, 25 km or more = 0), relative speed 10% (km/s over 15) and time to closest approach 10% "
-        "(within 6 h = 1, 24 h or more = 0); the last two only count when the miss is under 25 km. Close-approach results are precomputed "
-        "for the highest-risk objects.\n"
-        "- **Colour levels:** by risk rank among the active satellites: the 10 highest-risk are red, the next 30 yellow, all others green "
-        "(the watchlist draws on the 50 highest-risk satellites, so all 50 show 10 / 30 / 10; fewer are the first N of them in the chosen order). Debris is not on the watchlist; it can be drawn on the globe.\n"
-        "- **Footprint:** latitude band ±min(i, 180−i); time per latitude from sin φ = sin i · sin u.\n"
-        "- **Close approaches:** coarse-grid SGP4 screening with 0.5 s refinement of local minima, against every satellite and debris fragment.\n"
-        "- **Scope:** low Earth orbit (LEO) only: the watchlist, tracker, screening and assistant cover active satellites with a mean altitude and perigee below 2,000 km. "
-        "Objects in higher orbits are not listed (a higher orbit that crosses LEO still counts as a close-approach partner).\n"
-        "- **Debris:** the debris groups (TLE or CelesTrak JSON files in data/debris) are parsed into the same record format. They are not on the watchlist "
-        "or in the pickers; they are only drawn as orbits on the Watchlist globe and used as close-approach partners when an active satellite is screened "
-        "(Screen close approaches, and the close-approach terms of the risk score). Altitude and risk figures are for active satellites only."
-        "Altitude bands are the densest ranges of the active catalogue, found from the data.\n"
-        "- **Assistant (optional):** off unless an API key is supplied. The model only receives numbers computed above, or calls the app's own lookup functions; it never computes orbits.\n"
-        "- **Limits:** one element set per object (no history until snapshots are added), mean elements are only km-accurate, "
-        "and active satellites that manoeuvre invalidate drag-based decay estimates."
-    )
-
 # footer under every section
 st.markdown(
     '<div class="orbisk-footer">Built by <b>' + html.escape(", ".join(TEAM)) + f'</b> &nbsp;·&nbsp; <a href="{REPO_URL}" target="_blank" rel="noopener">GitHub</a>'

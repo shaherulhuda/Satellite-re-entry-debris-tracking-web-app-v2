@@ -293,3 +293,13 @@ def test_decay_view_has_no_observed_perigee_trend():
     labels = [m.label for m in at.metric]
     assert "Est. time to re-entry" in labels and "Current decay rate" in labels
     assert "Observed perigee trend" not in labels
+
+
+def test_no_how_these_numbers_are_computed_box():
+    for section in (None, SEC_TRACK, SEC_TRIAGE):
+        at = open_app(400)
+        if section:
+            at.session_state["section"] = section
+        at.run()
+        assert not at.exception
+        assert not [e for e in at.expander if "How these numbers" in str(e.label)]
