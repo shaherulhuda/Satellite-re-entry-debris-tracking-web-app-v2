@@ -61,7 +61,7 @@ iframe { border-radius: 14px; }
 [data-testid="stButtonGroup"] button[role="radio"][data-selected="true"] p { color: #fff; font-weight: 600; }
 .st-key-tracker_view button[role="radio"] { padding: .25rem .8rem; }
 .st-key-tracker_view button[role="radio"] p { font-size: .85rem; }
-.st-key-section { margin: 0; padding-right: 6.5rem; }  /* keeps the panels clear of the floating assistant button */
+.st-key-section { margin: 0; padding-right: 7.8rem; }  /* keeps the panels clear of the floating assistant button */
 [data-testid="stHorizontalBlock"]:has(.st-key-section) { margin-bottom: 1.1rem; }
 .st-key-section [role="radiogroup"] { flex-wrap: wrap; gap: .7rem; justify-content: flex-end; }
 /* the three main features as glass panels in the header row */
@@ -104,13 +104,13 @@ iframe { border-radius: 14px; }
 
 /* floating assistant button: planet icon with a white label under it; hidden label while the popup is open */
 .st-key-ai_fab { position: fixed; top: 1rem; right: 1.5rem; z-index: 1000001; width: auto !important; touch-action: none; cursor: grab; }
-.st-key-ai_fab button { width: 3.5rem; height: 3.5rem; padding: 0; border: 0; border-radius: 50%; font-size: 0;
+.st-key-ai_fab button { width: 4.8rem; height: 4.8rem; padding: 0; border: 0; border-radius: 50%; font-size: 0;
     background: url(__ICON__) center / contain no-repeat; }
 .st-key-ai_fab button:hover, .st-key-ai_fab button:focus, .st-key-ai_fab button:active {
     background-color: transparent !important; border: 0 !important; box-shadow: none !important; }
 .st-key-ai_fab button > * { display: none; }
 .st-key-ai_fab::after { content: "Ask Orbisk AI"; position: absolute; top: calc(100% + 2px); left: 50%; transform: translateX(-50%);
-    white-space: nowrap; padding: 3px 10px; border-radius: 999px; font-size: .75rem; font-weight: 600; line-height: 1.3;
+    white-space: nowrap; padding: 4px 14px; border-radius: 999px; font-size: .92rem; font-weight: 600; line-height: 1.3;
     pointer-events: none; background: #ffffff; color: #0a0e1f; box-shadow: 0 1px 6px rgba(0,0,0,.35); }
 .st-key-ai_fab:has(button[aria-expanded="true"])::after { display: none; }
 [data-testid="stPopoverBody"] { width: min(520px, 92vw); max-height: calc(100vh - 8rem); overflow-y: auto; }
@@ -905,7 +905,7 @@ if (!P.__orbiskDrag) {
   nameButton();
   new MutationObserver(nameButton).observe(D.body, {childList: true, subtree: true});
   const apply = (x, y) => {
-    const w = 56, h = 56;
+    const w = 77, h = 77;
     x = Math.min(Math.max(24, x), Math.max(24, P.innerWidth - w - 24)); y = Math.min(Math.max(12, y), Math.max(12, P.innerHeight - h - 30));  
     style.textContent = `.st-key-ai_fab{left:${x}px !important;top:${y}px !important;right:auto !important;}`;
     return [x, y];
