@@ -61,11 +61,17 @@ iframe { border-radius: 14px; }
 [data-testid="stButtonGroup"] button[role="radio"][data-selected="true"] p { color: #fff; font-weight: 600; }
 .st-key-tracker_view button[role="radio"] { padding: .25rem .8rem; }
 .st-key-tracker_view button[role="radio"] p { font-size: .85rem; }
-.st-key-section { margin-bottom: .6rem; }
-.st-key-section [role="radiogroup"] { flex-wrap: wrap; gap: .6rem; }
-.st-key-section button[role="radio"] { padding: .55rem 1.7rem; height: auto; min-height: 3.2rem; }  /* the three main features: bigger than the sub-views */
-.st-key-section button[role="radio"] p { font-size: 1.12rem; }
+.st-key-section { margin: 0; padding-right: 6.5rem; }  /* keeps the panels clear of the floating assistant button */
+[data-testid="stHorizontalBlock"]:has(.st-key-section) { margin-bottom: 1.1rem; }
+.st-key-section [role="radiogroup"] { flex-wrap: wrap; gap: .7rem; justify-content: flex-end; }
+/* the three main features as glass panels in the header row */
+.st-key-section button[role="radio"] { border-radius: 14px !important; padding: .55rem 1.2rem; height: auto; min-height: 3.4rem;
+    background: rgba(12, 20, 44, .55) !important; backdrop-filter: blur(10px); border: 1px solid rgba(120, 200, 255, .22) !important;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, .3); }
+.st-key-section button[role="radio"]:hover { transform: translateY(-2px); }
+.st-key-section button[role="radio"] p { font-size: 1.05rem; }
 .st-key-section [data-testid="stIconEmoji"] { font-size: 1.3rem; }
+@media (max-width: 640px) { .st-key-section { padding-right: 0; } .st-key-section [role="radiogroup"] { justify-content: flex-start; } }
 
 /* scrollbars and tooltips */
 * { scrollbar-width: thin; scrollbar-color: rgba(79, 209, 224, .5) transparent; }
@@ -91,7 +97,7 @@ iframe { border-radius: 14px; }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 
 /* header: logo top-left with the tagline beside it */
-.orbisk-header { display: flex; align-items: center; gap: 1rem; margin: 0 0 .75rem; }
+.orbisk-header { display: flex; align-items: center; gap: 1rem; margin: 0; }
 .orbisk-header img { height: 52px; width: auto; }
 .orbisk-header .tagline { font-size: 1.05rem; line-height: 1.25; opacity: .8; border-left: 1px solid rgba(160, 200, 255, .35); padding-left: 1rem; }
 @media (max-width: 640px) { .orbisk-header .tagline { display: none; } }
@@ -176,16 +182,19 @@ h4 { font-size: 1.2rem !important; }
 @media (max-width: 760px) { .orbisk-cover .cards { grid-template-columns: 1fr; } }
 </style>""".replace("__BG__", _data_uri("orbisk-bg.jpg")).replace("__ICON__", _data_uri("orbisk-mark.png"))
 # one unindented line of HTML: indented or multi-line HTML is rendered by markdown as a code block
-st.markdown(
-    _CSS
-    + (
-        '<div class="orbisk-header">'
-        + f'<img alt="Orbisk" src="{_data_uri("orbisk-logo-for-dark.png")}">'
-        + '<div class="tagline">Re-entry &amp; debris<br>mitigation assistant</div></div>'
-        if entered else ""
-    ),
-    unsafe_allow_html=True,
-)
+if entered:
+    # header row: the logo on the left, the three main sections as panels on the right (the switcher is drawn there further down)
+    head_logo, head_nav = st.columns([5, 7], vertical_alignment="center")
+    with head_logo:
+        st.markdown(
+            _CSS
+            + '<div class="orbisk-header">'
+            + f'<img alt="Orbisk" src="{_data_uri("orbisk-logo-for-dark.png")}">'
+            + '<div class="tagline">Re-entry &amp; debris<br>mitigation assistant</div></div>',
+            unsafe_allow_html=True,
+        )
+else:
+    st.markdown(_CSS, unsafe_allow_html=True)
 
 
 
@@ -432,8 +441,9 @@ default = 0
 # one section at a time: only the section on screen is built (a tab bar would build all three on every click)
 if "_goto" in st.session_state:
     st.session_state["section"] = st.session_state.pop("_goto")
-section = st.segmented_control("Section", [SEC_WATCH, SEC_TRACK, SEC_TRIAGE], key="section", default=SEC_WATCH, required=True,
-                               label_visibility="collapsed")
+with head_nav:
+    section = st.segmented_control("Section", [SEC_WATCH, SEC_TRACK, SEC_TRIAGE], key="section", default=SEC_WATCH, required=True,
+                                   label_visibility="collapsed")
 
 
 # ---------------------------------------------------------------- Watchlist
