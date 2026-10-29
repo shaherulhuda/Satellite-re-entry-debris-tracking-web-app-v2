@@ -449,8 +449,7 @@ with head_nav:
 # ---------------------------------------------------------------- Watchlist
 @st.fragment
 def watchlist_view():
-    c_mode, c_n, c_dl = st.columns([3, 1, 1], vertical_alignment="bottom")
-    dl_slot = c_dl.empty()  # the CSV button lives here, top-right next to the controls; it is filled once the table exists
+    c_mode, c_n = st.columns([3, 1])
     mode = sticky(c_mode.selectbox, "w_mode", "Rank by", ["Risk score: highest first", "Risk score: lowest first",
                                                           "Soonest estimated re-entry"],
                   help="The watchlist draws on the 50 highest-risk active satellites; this orders them and the first "
@@ -506,6 +505,11 @@ def watchlist_view():
         return "data:image/svg+xml;utf8," + urllib.parse.quote(svg, safe="")
 
     shown_table = table.assign(**{"Risk score": [risk_bar(s, l) for s, l in zip(top["risk"], levels)]})
+    _gap, c_dl = st.columns([6, 1.2])  # the CSV button sits at the top right of the table
+    c_dl.download_button("Download CSV", data=table.assign(**{"NORAD ID": top["NORAD_CAT_ID"].astype(int)})
+                         .assign(Level=levels.map({"red": "High", "yellow": "Medium", "green": "Low"}))
+                         .to_csv(index=False).encode("utf-8"),
+                         file_name="orbisk_watchlist.csv", mime="text/csv", width="stretch")
     event = st.dataframe(
         shown_table, width="stretch", hide_index=True, key=f"watch_table_{st.session_state.get('_watch_gen', 0)}", on_select="rerun",
         selection_mode=["single-row", "single-cell"],  # click any cell (or tick the row) to open the object
@@ -534,10 +538,6 @@ def watchlist_view():
                 go_to(SEC_TRACK, obj=picked_id, view=VIEW_FOOT)
             else:
                 go_to(SEC_TRIAGE, obj=picked_id, auto=True)
-    dl_slot.download_button("Download CSV", data=table.assign(**{"NORAD ID": top["NORAD_CAT_ID"].astype(int)})
-                            .assign(Level=levels.map({"red": "High", "yellow": "Medium", "green": "Low"}))
-                            .to_csv(index=False).encode("utf-8"),
-                            file_name="orbisk_watchlist.csv", mime="text/csv", width="stretch")
     if ca_meta is None or not top["ca_screened"].all():
         st.caption("Close-approach columns are filled for the highest-risk objects only (`tools/compute_conjunctions.py`); "
                    "— means not screened or no approach within the threshold.")
