@@ -509,7 +509,7 @@ def watchlist_view():
     dl_slot = c_dl.empty()  # filled below, once the table has told us which row is ticked
     event = st.dataframe(
         shown_table, width="stretch", hide_index=True, key=f"watch_table_{st.session_state.get('_watch_gen', 0)}", on_select="rerun",
-        selection_mode=["single-row", "single-cell"],  # click any cell (or tick the row) to open the object
+        selection_mode=["multi-row", "single-cell"],  # tick any number of rows; one ticked row (or a clicked cell) offers the next steps
         column_config={
             "Perigee (km)": st.column_config.NumberColumn(format="%.1f"),
             "Apogee (km)": st.column_config.NumberColumn(format="%.1f"),
@@ -519,20 +519,24 @@ def watchlist_view():
             "Risk score": st.column_config.ImageColumn("Risk score", width="medium"),
         },
     )
-    # CSV: only the ticked satellite when one is ticked, otherwise the whole table
+    # CSV: only the ticked satellites when any are ticked, otherwise the whole table
     ticked = sorted({r for r in event.selection.rows} | {c[0] for c in event.selection.cells if isinstance(c, (tuple, list))})
     ticked = [r for r in ticked if r < len(top)]
     csv_table = table.assign(**{"NORAD ID": top["NORAD_CAT_ID"].astype(int)}).assign(Level=levels.map({"red": "High", "yellow": "Medium", "green": "Low"}))
     csv_name = "orbisk_watchlist.csv"
     if ticked:
         csv_table = csv_table.iloc[ticked]
-        csv_name = "orbisk_" + str(csv_table["Name"].iloc[0]).replace(" ", "_").replace("/", "-") + ".csv"
-    dl_slot.download_button("Download selected CSV" if ticked else "Download CSV", data=csv_table.to_csv(index=False).encode("utf-8"),
-                            file_name=csv_name, mime="text/csv", width="stretch",
-                            help="Only the ticked satellite is included." if ticked else "Tick a satellite in the table to download just that one.")
-    # clicking a row (any cell, or its tick box) offers two next steps for that satellite
-    picked = list(event.selection.rows) or [c[0] if isinstance(c, (tuple, list)) else c.get("row") for c in event.selection.cells]
-    picked_id = table_ids[picked[0]] if picked and picked[0] < len(table_ids) else None
+        csv_name = ("orbisk_" + str(csv_table["Name"].iloc[0]).replace(" ", "_").replace("/", "-") if len(ticked) == 1
+                    else f"orbisk_{len(ticked)}_satellites") + ".csv"
+    dl_slot.download_button(("Download selected CSV" if len(ticked) == 1 else f"Download {len(ticked)} selected CSV") if ticked else "Download CSV",
+                            data=csv_table.to_csv(index=False).encode("utf-8"), file_name=csv_name, mime="text/csv", width="stretch",
+                            help="Only the ticked satellites are included." if ticked else "Tick one or more satellites in the table to download just those.")
+    # exactly one satellite ticked (or one cell clicked) offers two next steps for it; several ticked can only be downloaded
+    picked_id = table_ids[ticked[0]] if len(ticked) == 1 else None
+    if len(ticked) > 1:
+        with st.container(border=True, key="pick_actions"):
+            st.markdown(f"**{len(ticked)} satellites ticked**  \n<span style=\"font-size:.85rem;opacity:.7\">Download them with the button above, "
+                        "or tick just one to open it.</span>", unsafe_allow_html=True)
     if picked_id is not None:
         with st.container(border=True, key="pick_actions"):
             p1, p2, p3 = st.columns([2, 1.3, 1.5], vertical_alignment="center")

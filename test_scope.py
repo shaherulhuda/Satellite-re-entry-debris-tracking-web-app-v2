@@ -314,3 +314,14 @@ def test_csv_download_is_only_the_ticked_satellite():
     assert not at.exception
     labels = [b.proto.label for b in at.get("download_button")]
     assert "Download selected CSV" in labels and "Download CSV" not in labels
+
+
+def test_several_ticked_satellites_download_together_and_have_no_open_buttons():
+    at = open_app(400).run()
+    at.session_state["watch_table_0"] = {"selection": {"rows": [0, 2, 3], "columns": [], "cells": []}}
+    at.run()
+    assert not at.exception
+    labels = [b.proto.label for b in at.get("download_button")]
+    assert labels == ["Download 3 selected CSV"]
+    assert any("3 satellites ticked" in m.value for m in at.markdown)
+    assert not [b for b in at.button if b.key in ("pick_footprint", "pick_screen")]  # opening needs exactly one
