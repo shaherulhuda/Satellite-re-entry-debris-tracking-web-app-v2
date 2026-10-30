@@ -2,6 +2,7 @@
 Debris is only drawn on the globe and used as a close-approach partner."""
 import json
 import re
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -16,7 +17,7 @@ SEC_TRACK, SEC_TRIAGE = "📉 Re-entry Tracker", "⚠️ Screen close approaches
 def open_app(timeout=400, entered=True):
     """The app past its cover page (the cover is shown first in a real session)."""
     from streamlit.testing.v1 import AppTest
-    at = AppTest.from_file("app.py", default_timeout=timeout)
+    at = AppTest.from_file(str(Path(__file__).parent.parent / "app.py"), default_timeout=timeout)
     if entered:
         at.session_state["entered"] = True
     return at
@@ -155,7 +156,7 @@ def test_clicking_a_suggestion_asks_the_assistant(monkeypatch):
 
 def test_triage_cards_and_bands():
     import ast
-    src = open("app.py").read()
+    src = open(Path(__file__).parent.parent / "app.py").read()
     fn = next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "miss_band")
     ns = {}
     exec(compile(ast.Module([fn], []), "app.py", "exec"), ns)

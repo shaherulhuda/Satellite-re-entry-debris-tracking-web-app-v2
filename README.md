@@ -54,11 +54,27 @@ Screening every object would be too slow for the web app, so `tools/compute_conj
 the highest-risk objects (default 300) into `data/closest_approaches.json`. Re-run it after `tools/refresh_data.py`.
 
 
+## Repository layout
+
+| Path | Contents |
+|---|---|
+| `app.py` | Streamlit app (entry point for Streamlit Cloud) |
+| `orbits.py`, `decay.py`, `footprint.py`, `conjunction.py`, `triage.py`, `maneuver.py`, `history.py`, `debris.py`, `snapshot.py`, `dataset.py` | Orbit, risk, decay, screening and data logic |
+| `globe.py`, `charts.py` | Plotly globe and charts |
+| `llm.py` | Claude assistant (tools, prompts, error handling) |
+| `active.json` | CelesTrak active-satellite element sets |
+| `data/` | Debris element sets, closest approaches, perigee history, coastlines |
+| `assets/`, `static/` | Logos and background; shared `plotly.min.js` |
+| `tools/` | Data refresh and precompute scripts |
+| `tests/` | pytest suite (`python -m pytest` from the repo root) |
+| `results/` | Validation scripts, results and figures for the report (see `results/README.md`) |
+| `.streamlit/` | Theme and server config |
+
 ## Speed notes
 
 - **Plotly is shared.** Every globe loads one copy of Plotly from `static/plotly.min.js` (served because `.streamlit/config.toml` sets
   `enableStaticServing`), which the browser caches. If that file cannot be served, the same version is fetched from the Plotly CDN.
-  `test_debris_globe.py` checks the file matches the pinned `plotly` version, so update it when you bump Plotly:
+  `tests/test_debris_globe.py` checks the file matches the pinned `plotly` version, so update it when you bump Plotly:
   `cp $(python -c "import plotly,os;print(os.path.dirname(plotly.__file__))")/package_data/plotly.min.js static/`.
 - **One section at a time.** The Watchlist, Re-entry Tracker and Screen close approaches sections are separate fragments; only the one on
   screen is built, and interacting inside it reruns just that fragment. The assistant is its own fragment too.

@@ -65,7 +65,7 @@ def test_attach_closest_approaches():
 
 
 def test_compute_script_runs_on_a_tiny_shortlist():
-    spec = importlib.util.spec_from_file_location("compute_conjunctions", Path(__file__).with_name("tools") / "compute_conjunctions.py")
+    spec = importlib.util.spec_from_file_location("compute_conjunctions", Path(__file__).parent.parent / "tools" / "compute_conjunctions.py")
     mod = importlib.util.module_from_spec(spec)
     sys.modules["compute_conjunctions"] = mod  # worker processes unpickle the task function by module name
     spec.loader.exec_module(mod)

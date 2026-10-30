@@ -95,8 +95,8 @@ def test_plotly_is_shared_not_inlined():
     html = globe.orbit_html([path])
     assert len(html) < 1_000_000 and f'src="{globe.PLOTLY_SRC}"' in html and globe.PLOTLY_CDN in html  # static copy + CDN fallback
     packaged = Path(plotly.__file__).parent / "package_data" / "plotly.min.js"
-    assert (Path(__file__).parent / "static" / "plotly.min.js").read_bytes() == packaged.read_bytes()  # static copy matches the pinned plotly
-    assert "enableStaticServing = true" in (Path(__file__).parent / ".streamlit" / "config.toml").read_text()
+    assert (Path(__file__).parent.parent / "static" / "plotly.min.js").read_bytes() == packaged.read_bytes()  # static copy matches the pinned plotly
+    assert "enableStaticServing = true" in (Path(__file__).parent.parent / ".streamlit" / "config.toml").read_text()
 
 
 def test_globe_animation_does_not_fight_dragging():

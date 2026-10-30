@@ -12,7 +12,7 @@ import snapshot
 
 def load_refresh():
     import importlib.util
-    spec = importlib.util.spec_from_file_location("refresh_data", debris.Path(__file__).with_name("tools") / "refresh_data.py")
+    spec = importlib.util.spec_from_file_location("refresh_data", debris.Path(__file__).parent.parent / "tools" / "refresh_data.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
