@@ -18,3 +18,7 @@ Inputs that are not produced by the scripts:
 - `e2_socrates_watchlist.csv` (E2): the 34 close approaches CelesTrak SOCRATES Plus listed for five watchlist satellites (window 29 Oct 08:00 – 5 Nov 08:00 UTC), copied from celestrak.org/SOCRATES on 30 Oct 2026.
 
 All results use the data committed on 29 Oct 2026 (commit 4fb215c). No API key is stored in any file here.
+
+## Figures (report Figures 2–5)
+
+`python make_figures.py` redraws the four report charts into `figures/` from the result files above (needs matplotlib): fig_e1.png (Figure 2), fig_e2.png (Figure 3), fig_e3.png (Figure 4), fig_e3w.png (Figure 5).
