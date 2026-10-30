@@ -1,5 +1,5 @@
 import pandas as pd, numpy as np
-c=pd.read_csv("/home/claude/results/e1_candidates.csv"); d=pd.read_csv("/home/claude/results/e1_decay_dates.csv")
+c=pd.read_csv("results/e1_candidates.csv"); d=pd.read_csv("results/e1_decay_dates.csv")
 m=c.merge(d,left_on="NORAD_CAT_ID",right_on="norad")
 ep=pd.to_datetime(m.EPOCH); dd=pd.to_datetime(m.decay_date)
 m["actual_days"]=(dd+pd.Timedelta(hours=12)-ep).dt.total_seconds()/86400
@@ -19,4 +19,4 @@ still=c[(c.still_in_catalogue)&(pd.to_datetime(c.EPOCH)+pd.to_timedelta(c.decay_
 print("predicted (central) before 29 Oct but still in orbit:",len(still),"of which Starlink",still.OBJECT_NAME.str.contains("STARLINK").sum())
 still2=c[(c.still_in_catalogue)&(pd.to_datetime(c.EPOCH)+pd.to_timedelta(c.decay_days_high,unit="D")<cut)]
 print("predicted (whole window) before 29 Oct but still in orbit:",len(still2), list(still2.OBJECT_NAME))
-m.to_csv("/home/claude/results/e1_reentry_check.csv",index=False)
+m.to_csv("results/e1_reentry_check.csv",index=False)

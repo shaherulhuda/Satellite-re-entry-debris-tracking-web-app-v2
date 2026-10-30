@@ -1,18 +1,20 @@
-# Validation results
+# Validation results (final report, Section 7 and Appendix C)
 
-Scripts and result files from the validation work (Appendix C). Nothing here is used by the app.
+Run every script from the repository root, with the app's packages installed (`pip install -r requirements.txt`).
+The first argument is the repository folder (`.`). Outputs are written to this `results/` folder.
 
-| File | What it is |
-|---|---|
-| `e1.py` | Decay estimate check. Part A compares predicted and observed altitude loss for objects present in both the early-October and the 29 Oct snapshots; part B lists objects whose predicted re-entry fell before 29 Oct. Writes `e1_candidates.csv` and `e1_rate_check.csv`. |
-| `e1b.py` | Compares those candidates with actual decay dates (`e1_decay_dates.csv`). Writes `e1_reentry_check.csv`. |
-| `e1_decay_dates.csv` | Actual decay dates used by `e1b.py` (NORAD id, date). |
-| `e1_reentry_check.csv` | Predicted re-entry window vs actual decay date for each candidate. |
-| `e1_rate_check.csv` | Predicted vs observed altitude drop for every object in both snapshots (about 10,000 rows). |
-| `e2b.py` | Screens the ISS for one week with the app's close-approach code and compares the passes with five SOCRATES passes (reference values are written into the script). Writes `e2_iss_vs_socrates.csv`. |
-| `e2_iss_vs_socrates.csv` | The comparison: reference vs app time, miss distance and relative speed. |
-| `e3.py` | Risk-score weight sensitivity: re-ranks the low-Earth-orbit satellites with each weight halved, doubled or set to zero. Writes `e3_weight_sensitivity.csv`. |
-| `e3_weight_sensitivity.csv` | Top-20 / top-50 overlap and rank correlation for each weight change. |
+| Experiment | Script | Output files | Date run |
+|---|---|---|---|
+| Test suite | `pytest` | 82 / 82 passed in 106 s (pytest 9.2.0, Python 3.13.18) | 29 Oct 2026 |
+| E1 Re-entry estimate | `python results/e1.py . active_2026-10-06.json` then `python results/e1b.py` | `e1_candidates.csv`, `e1_rate_check.csv`, `e1_reentry_check.csv` | 29 Oct 2026 |
+| E2 Close-approach screening | `python results/e2c.py .` | `e2_watchlist_vs_socrates.csv` | 30 Oct 2026 |
+| E3 Weight sensitivity | `python results/e3.py .` | `e3_weight_sensitivity.csv` | 29 Oct 2026 |
+| E4 RAG AI assistant | `ANTHROPIC_API_KEY=... python results/e4.py .` and `python results/e4b.py .` | `e4_run.json` (6 questions), `e4b_run.json` (4 questions) | 30 Oct 2026 |
 
-The scripts take the repository folder as their first argument and write to `/home/claude/results/`; change that path to run them elsewhere.
-`e1_candidates.csv` (an intermediate file written by `e1.py` and read by `e1b.py`) was not part of the files supplied.
+Inputs that are not produced by the scripts:
+
+- `active_2026-10-06.json` (E1): the 6 Oct 2026 snapshot. Recreate it with `git show 99f8ce4:active.json > active_2026-10-06.json`.
+- `e1_decay_dates.csv` (E1): actual re-entry dates of 48 objects, looked up one by one in the Orbital Register (orbitalradar.com/register/norad/<NORAD id>) on 29 Oct 2026.
+- `e2_socrates_watchlist.csv` (E2): the 34 close approaches CelesTrak SOCRATES Plus listed for five watchlist satellites (window 29 Oct 08:00 – 5 Nov 08:00 UTC), copied from celestrak.org/SOCRATES on 30 Oct 2026.
+
+All results use the data committed on 29 Oct 2026 (commit 4fb215c). No API key is stored in any file here.

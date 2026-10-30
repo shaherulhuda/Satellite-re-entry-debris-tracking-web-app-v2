@@ -39,4 +39,4 @@ contrib.insert(0,"name",cat.loc[top20[:10],"OBJECT_NAME"]); contrib.insert(1,"sc
 print(contrib.round(1).to_string(index=False))
 print("mean share of score in top20:", (pd.DataFrame({k: W[k]*comp.loc[top20][col] for k,col in decay.COMPONENT_OF.items()}).sum()/ (base.loc[top20].sum()/100)).round(3).to_dict())
 print("LEO active sats scored", int(sat.sum()), "runtime s", round(time.time()-t0,1))
-df.to_csv("/home/claude/results/e3_weight_sensitivity.csv", index=False)
+df.to_csv("results/e3_weight_sensitivity.csv", index=False)

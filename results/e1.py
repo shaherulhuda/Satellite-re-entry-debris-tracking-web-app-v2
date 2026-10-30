@@ -23,7 +23,7 @@ gone = old[~old.still_in_catalogue]
 print("all LEO objects gone from active catalogue:",len(gone))
 cols=["NORAD_CAT_ID","OBJECT_NAME","EPOCH","h","perigee_km","decay_days","decay_days_low","decay_days_high","decay_status","elapsed","still_in_catalogue"]
 cand = pd.concat([pred_window, gone]).drop_duplicates("NORAD_CAT_ID")[cols].sort_values("decay_days")
-cand.to_csv("/home/claude/results/e1_candidates.csv",index=False)
+cand.to_csv("results/e1_candidates.csv",index=False)
 print(cand.round(1).to_string(index=False, max_rows=80))
 # ---- Part A: predicted vs observed altitude loss for objects in both snapshots
 m = old.merge(new[["NORAD_CAT_ID","EPOCH_DT","h"]], on="NORAD_CAT_ID", suffixes=("","_new"))
@@ -49,4 +49,4 @@ out = pd.concat([m.groupby("group").apply(summ, include_groups=False), summ(m).t
 print(out.to_string())
 # low objects only (where decay matters): h<450
 low=m[m.h<450]; print("h<450 km:"); print(pd.concat([low.groupby("group").apply(summ, include_groups=False), summ(low).to_frame("all").T]).to_string())
-m.to_csv("/home/claude/results/e1_rate_check.csv",index=False)
+m.to_csv("results/e1_rate_check.csv",index=False)

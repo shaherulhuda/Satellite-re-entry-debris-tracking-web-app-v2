@@ -1,0 +1,132 @@
+[
+ {
+  "q": "What is the highest-risk satellite and its score?",
+  "keywords": [
+   "RASSVET-3 17",
+   "51"
+  ],
+  "missing": [
+   "51"
+  ],
+  "tools": [
+   "search_objects"
+  ],
+  "usage": {
+   "input_tokens": 5152,
+   "output_tokens": 240
+  },
+  "seconds": 3.3,
+  "answer": "The highest-risk satellite is **RASSVET-3 17** (NORAD ID 100083) with a risk score of **50.5**.\n\nThis is a payload in the red risk category. It has:\n- Perigee: 174.9 km\n- Apogee: 178.8 km\n- Inclination: 82.27\u00b0\n- Estimated days to re-entry: 1.55 days\n\nThe high score reflects its very low perigee (contributing 20% of the score), its extremely short estimated decay time of about 1.5 days (20%), its high inclination (10%), and a combination of other factors including type, miss distance, and timing to closest approach.",
+  "trace": [
+   {
+    "tool": "search_objects",
+    "input": {
+     "limit": 1,
+     "sort_by": "risk"
+    },
+    "error": false
+   }
+  ]
+ },
+ {
+  "q": "How is the risk score calculated?",
+  "keywords": [
+   "perigee",
+   "miss distance",
+   "25%"
+  ],
+  "missing": [],
+  "tools": [],
+  "usage": {
+   "input_tokens": 2455,
+   "output_tokens": 404
+  },
+  "seconds": 4.5,
+  "answer": "The risk score (0\u2013100) is calculated from six weighted factors, all with fixed weights:\n\n1. **Perigee (20%)**: Lower orbits are riskier. The score ranges from 1 at 150 km to 0 at 700 km or above.\n\n2. **Decay time (20%)**: Faster decay = higher risk. The score is 1 for objects decaying within 10 days, 0 for 10 years or more, on a logarithmic scale. Objects with no measurable decay score 0.\n\n3. **Inclination (10%)**: Higher inclination covers more of Earth's surface, so it contributes proportionally (as a share of Earth's surface the orbit can overfly).\n\n4. **Object type (5%)**: Debris scores 1.0, rocket bodies 0.8, and payloads 0.3 (payloads are least risky).\n\n5. **Miss distance (25%)**: The closest approach to any satellite or debris in the catalogue within 24 hours is the highest-weight factor. Score is 1 at 1 km and 0 at 25 km or more, on a logarithmic scale.\n\n6. **Relative speed (10%)**: Faster conjunctions are riskier. Calculated as speed (km/s) divided by 15.\n\n7. **Time to closest approach (10%)**: Imminent conjunctions (within 6 hours) score higher; 24 hours or more = 0.\n\nNote: the speed and time factors only count when the closest miss is under 25 km.\n\nThese are combined with fixed weights to produce a single 0\u2013100 score. The score is a heuristic triage tool, not a probability of collision or damage.",
+  "trace": []
+ },
+ {
+  "q": "Does this app cover geostationary satellites?",
+  "keywords": [
+   "2,000",
+   "low"
+  ],
+  "missing": [],
+  "tools": [],
+  "usage": {
+   "input_tokens": 2458,
+   "output_tokens": 127
+  },
+  "seconds": 2.0,
+  "answer": "No. The app covers **low Earth orbit (LEO) only**. \n\nSpecifically, the Watchlist, Re-entry Tracker and close-approach screening are limited to active satellites whose mean altitude and perigee are both below 2,000 km. Geostationary satellites orbit at roughly 36,000 km altitude, so they are well outside the app's scope.\n\nThe app is designed to track objects at high risk of atmospheric re-entry and collision with other LEO satellites and debris \u2014 a concern that does not apply to geostationary orbit.",
+  "trace": []
+ },
+ {
+  "q": "What should we do about RASSVET-3 17?",
+  "keywords": [
+   "RASSVET-3 17",
+   "monitor|prepare|act"
+  ],
+  "missing": [],
+  "tools": [
+   "get_object_details"
+  ],
+  "usage": {
+   "input_tokens": 5662,
+   "output_tokens": 426
+  },
+  "seconds": 5.5,
+  "answer": "**Recommended action: PREPARE**\n\nRASSVET-3 17 is a payload in rapid decay and warrants preparation:\n\n- **Estimated re-entry: 1.55 days** (rough range 0.77\u20133.1 days) from the data snapshot time\n- **Risk level: red** (rank 1 out of 16,008 satellites)\n- **Current altitude: 161 km** with a decay rate of 12.6 km/day\n\nThe risk score of 50.5 is driven by:\n  - Very low perigee (174.9 km) \u2014 close to the 120 km re-entry threshold\n  - High decay rate (component 1.0 \u2014 worst case, \u226410 days)\n  - High inclination (82.3\u00b0) \u2014 can overfly much of Earth's surface\n  - No close approaches to other satellites within 24 hours (miss distance component is 0)\n\n**Next steps:**\n1. Monitor the decay trajectory and re-entry estimate updates as the data ages\n2. Prepare for potential public communication or coordination if re-entry occurs over populated areas\n3. Track the ground footprint: this orbit can reach latitudes up to \u00b182.3\u00b0, covering ~99% of Earth's surface\n\nThe main uncertainty is the \u00d72 range on decay estimates \u2014 re-entry could occur anywhere from ~18 hours to ~3 days from the snapshot. This is a case where operational monitoring is warranted.",
+  "trace": [
+   {
+    "tool": "get_object_details",
+    "input": {
+     "name": "RASSVET-3 17"
+    },
+    "error": false
+   }
+  ]
+ },
+ {
+  "q": "What does the Re-entry Tracker show?",
+  "keywords": [
+   "footprint|ground track",
+   "decay"
+  ],
+  "missing": [],
+  "tools": [],
+  "usage": {
+   "input_tokens": 2458,
+   "output_tokens": 285
+  },
+  "seconds": 3.4,
+  "answer": "The **Re-entry Tracker** shows the following for a selected satellite:\n\n1. **Current position**: where the object is right now (from SGP4 on the snapshot element set)\n\n2. **3D orbit**: a visual representation of the satellite's orbital path in three dimensions\n\n3. **3-orbit ground track**: the trace of where the satellite passes over Earth's surface for its next three orbits\n\n4. **Decay estimate with projected altitude chart**: a rough estimate of when the object will re-enter, based on measured atmospheric drag (with a decay-time range showing uncertainty of a factor of 2 or more), plus a chart showing how the altitude is projected to change over time\n\n5. **Ground footprint**: the latitude band the orbit can reach\u2014defined as plus or minus the smaller of the inclination angle and (180 minus inclination)\u2014along with:\n   - The share of Earth's surface that footprint covers\n   - The share of time the satellite spends at each latitude within that band\n\n**Important caveat**: the footprint shows *where an object can pass*, not where it will actually land. The decay estimate is particularly unreliable for satellites that manoeuvre to hold altitude (like Starlink), since the drag-based calculation assumes only atmospheric drag, not active propulsion.",
+  "trace": []
+ },
+ {
+  "q": "How many satellites are red?",
+  "keywords": [
+   "10"
+  ],
+  "missing": [],
+  "tools": [
+   "search_objects"
+  ],
+  "usage": {
+   "input_tokens": 6213,
+   "output_tokens": 385
+  },
+  "seconds": 4.3,
+  "answer": "There are **10 satellites at red level** (the top 10 by risk). They are:\n\n1. RASSVET-3 17 (risk 50.5, ~1.55 days to re-entry)\n2. ZHUQUE-2E R/B (risk 50.0, ~22.2 days)\n3. HYPSO-1 (risk 49.0, ~5.31 days)\n4. NAPA-1 (risk 48.8, ~4.49 days)\n5. STARLINK-1309 (risk 48.7, ~0.6 days)\n6. IOD-1 (risk 48.6, ~2.49 days)\n7. 2022-098C (risk 48.2, ~7.75 days)\n8. 2024-125A (risk 47.6, ~10.1 days)\n9. STARLINK-1283 (risk 47.3, ~3.67 days)\n10. STARLINK-4389 (risk 47.2, ~7.63 days)\n\nMost are low-altitude payloads with perigees under 280 km and estimated decay within 10 days. The highest-risk objects are dropping fastest and pose the most imminent re-entry threat.",
+  "trace": [
+   {
+    "tool": "search_objects",
+    "input": {
+     "level": "red",
+     "limit": 25
+    },
+    "error": false
+   }
+  ]
+ }
+]
