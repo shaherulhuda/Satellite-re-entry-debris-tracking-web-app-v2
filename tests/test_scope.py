@@ -326,3 +326,20 @@ def test_several_ticked_satellites_download_together_and_have_no_open_buttons():
     assert labels == ["Download 3 selected CSV"]
     assert any("3 satellites ticked" in m.value for m in at.markdown)
     assert not [b for b in at.button if b.key in ("pick_footprint", "pick_screen")]  # opening needs exactly one
+
+
+def test_assistant_with_a_configured_key_shows_no_key_box(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    at = open_app(400).run()
+    assert not at.exception
+    assert not [t for t in at.text_input if t.label == "Anthropic API key"]
+    assert not [i for i in at.info if "AI features are off" in i.value]
+    assert not [w for w in at.warning if "anyone with the link" in w.value]
+    assert at.selectbox(key="ai_model")  # the assistant itself is shown
+
+
+def test_assistant_without_a_key_still_asks_for_one(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    at = open_app(400).run()
+    assert [t for t in at.text_input if t.label == "Anthropic API key"]
+    assert [i for i in at.info if "AI features are off" in i.value]

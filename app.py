@@ -387,10 +387,21 @@ def _secret(name):
         return None
 
 
+def configured_key() -> str:
+    """The API key set up for this deployment (environment, Streamlit secrets), or "" when there is none."""
+    for name in ("ANTHROPIC_API_KEY", "anthropic_api_key"):
+        if _secret(name):
+            return str(_secret(name)).strip()
+    try:  # also accept a [anthropic] table with api_key in secrets.toml
+        return str(st.secrets["anthropic"]["api_key"]).strip()
+    except Exception:
+        return ""
+
+
 def ai_status():
     """(ready, client_key, message). client_key is the session-pasted key, or None to use the configured one."""
     pasted = (st.session_state.get("pasted_key") or "").strip()
-    configured = (_secret("ANTHROPIC_API_KEY") or "").strip()
+    configured = configured_key()
     if not (pasted or configured):
         return False, None, "AI is off: add an API key in the assistant (top right) to enable this."
     if configured and not pasted:
@@ -786,12 +797,14 @@ else:
 def assistant_view():
     with st.container(key="ai_fab"):
         with st.popover("Ask Orbisk AI"):
-            st.caption("Optional. The app is fully offline without this. When you add an Anthropic API key the assistant can "
-                       "explain results in plain language. It never calculates orbits: it only sees numbers this app computed, "
-                       "or looks data up through the app's own functions.")
-            pasted = (st.text_input("Anthropic API key", type="password", key="pasted_key",
-                                    help="Kept only in this browser session; not stored or logged.") or "").strip()
-            configured = (_secret("ANTHROPIC_API_KEY") or "").strip()
+            configured = configured_key()
+            pasted = ""
+            if not configured:  # a key set up for the deployment needs no explanation and no key box
+                st.caption("Optional. The app is fully offline without this. When you add an Anthropic API key the assistant can "
+                           "explain results in plain language. It never calculates orbits: it only sees numbers this app computed, "
+                           "or looks data up through the app's own functions.")
+                pasted = (st.text_input("Anthropic API key", type="password", key="pasted_key",
+                                        help="Kept only in this browser session; not stored or logged.") or "").strip()
             api_key = pasted or configured
             key_from_config = bool(configured) and not pasted
 
@@ -806,9 +819,6 @@ def assistant_view():
                         allowed = st.text_input("Access code", type="password", key="ai_gate") == gate
                         if not allowed:
                             st.warning("Enter the access code to use the assistant.")
-                    else:
-                        st.warning("This deployment uses a key from its configuration, so anyone with the link can spend it. "
-                                   "Set `ASSISTANT_PASSWORD` to require an access code.")
                 if allowed:
                     max_req = int(_secret("ASSISTANT_MAX_REQUESTS") or ASSISTANT_DEFAULT_MAX)
                     used = st.session_state.setdefault("ai_requests", 0)
