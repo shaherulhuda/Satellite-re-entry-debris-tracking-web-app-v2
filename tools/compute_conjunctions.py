@@ -52,7 +52,8 @@ def compute(top: int = 300, hours: float = 24.0, threshold_km: float = 50.0, wor
     base_only = {k: (v if k in decay.BASE_KEYS else 0.0) for k, v in decay.DEFAULT_WEIGHTS.items()}
     cat = cat.assign(base=decay.risk_score(comp, base_only))
     # the watchlist lists active LEO satellites only; they are screened against everything (satellites and debris)
-    shortlist = cat[(cat["source"] == "active") & cat["leo"]].sort_values("base", ascending=False).head(top)
+    # half Starlink, half other satellites: the watchlist holds at most 10 Starlink, so a plain top list would be nearly all Starlink
+    shortlist = dataset.balanced_shortlist(cat[(cat["source"] == "active") & cat["leo"]], top, "base")
     ts = cat["EPOCH_DT"].max()
     jd, fr = jday(ts.year, ts.month, ts.day, ts.hour, ts.minute, ts.second + ts.microsecond / 1e6)
     jobs = [(int(r.NORAD_CAT_ID), (float(r.perigee_km), float(r.apogee_km)), jd + fr, hours, threshold_km)

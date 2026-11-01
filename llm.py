@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 
 import conjunction
+import dataset
 import decay
 import footprint
 import history as history_mod
@@ -30,7 +31,7 @@ MAX_ROWS = 25
 APP_GUIDE = """ABOUT THE WEB APP (you may explain any of this; it is how the app works)
 Scope: low Earth orbit (LEO) only. The Watchlist, Re-entry Tracker and Screen close approaches cover active satellites from active.json whose mean altitude and perigee are below 2,000 km. Debris (CelesTrak groups Fengyun-1C, Iridium-33, Cosmos-2251) is never listed; it is only drawn as orbits on the Watchlist globe (the Debris box) and used as a close-approach partner when a satellite is screened and in the risk score. Higher orbits that cross LEO still count as partners.
 Data: public CelesTrak element sets (a snapshot, not live). Positions come from SGP4 on those elements, so accuracy falls as the elements age; results are triage aids, not operational decisions.
-Watchlist: the 50 highest-risk satellites. 'Rank by' orders them (risk highest first, lowest first, or soonest estimated re-entry) and 'Objects' (10-50) shows the first N of that order. Colour levels by risk rank among the satellites: top 10 red, next 30 yellow, rest green. The table shows perigee, apogee, inclination, estimated time to re-entry (with a x2 range), closest approach, relative speed, time to closest approach and the risk bar. Closest-approach columns are precomputed for the top 300 LEO satellites over 24 hours from the snapshot time.
+Watchlist: the 50 highest-risk satellites, with at most 10 of them Starlink (the highest-risk ones; Starlink is about two thirds of the catalogue). 'Rank by' orders them (risk highest first, lowest first, or soonest estimated re-entry) and 'Objects' (10-50) shows the first N of that order. Colour levels by risk rank within the watchlist (satellites outside it count as green): top 10 red, next 30 yellow, rest green. The table shows perigee, apogee, inclination, estimated time to re-entry (with a x2 range), closest approach, relative speed, time to closest approach and the risk bar. Closest-approach columns are precomputed for 300 LEO satellites (the 150 highest-risk Starlink and the 150 highest-risk others) over 24 hours from the snapshot time.
 Risk score (0-100, fixed weights, not adjustable): perigee 20% (150 km = 1, 700 km or more = 0); decay time 20% (10 days or less = 1, 10 years or more = 0, log scale; 0 if no measurable decay); inclination 10% (share of Earth's surface the orbit can overfly); object type 5% (debris 1.0, rocket body 0.8, payload 0.3); miss distance 25% (closest approach to any satellite or debris: 1 km = 1, 25 km or more = 0, log scale); relative speed 10% (km/s divided by 15); time to closest approach 10% (within 6 h = 1, 24 h or more = 0). Speed and time count only when the miss is under 25 km.
 Decay estimate: from each object's measured MEAN_MOTION_DOT (doubled, since the field is half the derivative) the altitude loss rate is scaled by air density (exponential atmosphere) and integrated down to 120 km. It needs a positive BSTAR drag term, is uncertain by a factor of 2 or more, and is unreliable for satellites that manoeuvre to hold altitude (e.g. Starlink).
 Re-entry Tracker: current position, 3D orbit, 3-orbit ground track, decay estimate with a projected altitude chart, and the ground footprint: the latitude band an orbit can reach (plus or minus the smaller of inclination and 180 minus inclination), the share of Earth's surface that covers, and the share of time spent at each latitude. It shows where an object can pass, not where it will land.
@@ -111,6 +112,14 @@ class DataContext:
         return out
 
 
+def watchlist_levels(pool: pd.DataFrame) -> pd.Series:
+    """red / yellow / green for each satellite, ranked within the watchlist (its 50, at most 10 Starlink); the rest are green."""
+    levels = pd.Series("green", index=pool.index)
+    sel = dataset.select_watchlist(pool)
+    levels.loc[sel.index] = decay.traffic_light(sel["risk"])
+    return levels
+
+
 def suggested_action(risk_level: str, miss_km, hours, est_days) -> dict:
     """monitor / prepare / act, from fixed rules. The model explains it; it does not choose it."""
     reasons = []
@@ -157,7 +166,7 @@ def object_facts(ctx: DataContext, norad_id: int, include_position: bool = True)
         raise KeyError(f"NORAD id {norad_id} is not an active low-Earth-orbit satellite (below 2,000 km)")
     rank = int((pool["risk"] > row["risk"]).sum()) + 1  # rank among the active LEO satellites
     df = pool
-    level = decay.traffic_light(pool["risk"]).loc[hit.index[0]]
+    level = watchlist_levels(pool).loc[hit.index[0]]
     comp = ctx.components.loc[hit.index[0]]
     facts = {
         "name": row["OBJECT_NAME"], "norad_id": int(row["NORAD_CAT_ID"]), "type_guess": row["type"],
@@ -236,7 +245,7 @@ TOOLS = [
                 "min_risk_score": {"type": "number"},
                 "level": {"type": "string", "enum": ["red", "yellow", "green"],
                           "description": "risk colour level: red = top 10 by risk, yellow = next 30, green = the rest"},
-                "max_miss_km": {"type": "number", "description": "only satellites whose closest approach (24 h, top 300 screened) is at most this far"},
+                "max_miss_km": {"type": "number", "description": "only satellites whose closest approach (24 h, 300 screened) is at most this far"},
                 "sort_by": {"type": "string", "enum": ["risk", "perigee", "decay_days", "apogee", "inclination", "closest_approach"],
                             "description": "default risk (highest first); the others sort ascending (closest_approach = smallest miss distance first)"},
                 "limit": {"type": "integer", "description": "rows to return, default 10, max 25"},
@@ -283,7 +292,7 @@ def _search(ctx: DataContext, a: dict) -> dict:
     if a.get("object_type"):
         m &= df["type"] == a["object_type"]
     if a.get("level"):
-        m &= decay.traffic_light(df["risk"]).reindex(df.index) == str(a["level"]).lower()
+        m &= watchlist_levels(df).reindex(df.index) == str(a["level"]).lower()
     if a.get("max_miss_km") is not None and "ca_miss_km" in df:
         m &= df["ca_miss_km"] <= float(a["max_miss_km"])
     if a.get("name_contains"):
@@ -296,7 +305,7 @@ def _search(ctx: DataContext, a: dict) -> dict:
         col = "risk"
     hit = hit.sort_values(col, ascending=(col != "risk"), na_position="last")
     limit = max(1, min(int(a.get("limit", 10)), MAX_ROWS))
-    levels = decay.traffic_light(df["risk"])
+    levels = watchlist_levels(df)
     rows = [{
         "name": r["OBJECT_NAME"], "norad_id": int(r["NORAD_CAT_ID"]), "type": r["type"], "level": levels.get(i),
         "closest_approach_km": _num(r.get("ca_miss_km")) if "ca_miss_km" in r else None,

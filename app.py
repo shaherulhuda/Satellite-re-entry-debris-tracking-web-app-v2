@@ -219,7 +219,7 @@ if not entered:
         '<div class="orbisk-cover"><div class="top"><div class="copy">'
         f'<img class="logo" alt="Orbisk" src="{_data_uri("orbisk-logo-for-dark.png")}">'
         "<h1>We track the risk, call the fall, catch the close calls — act before it\u2019s too late</h1>"
-        '<p class="lead">Orbisk ranks the 50 highest-risk active satellites in low Earth orbit, estimates when each might re-enter the atmosphere, '
+        '<p class="lead">Orbisk ranks the 50 highest-risk active satellites in low Earth orbit (at most 10 of them Starlink), estimates when each might re-enter the atmosphere, '
         'and screens them for close approaches with other satellites and space debris.</p></div>'
         '<div class="hero"><i class="orbit ring r3"></i><i class="orbit ring r2"></i><i class="orbit ring r1"></i><i class="orbit planet"></i></div></div>'
         '<div class="cards">'
@@ -277,7 +277,7 @@ import llm  # noqa: E402
 import orbits  # noqa: E402
 import triage  # noqa: E402
 
-WATCHLIST_SIZE = 50  # the watchlist always shows the 50 highest-risk active satellites
+WATCHLIST_SIZE = 50  # the watchlist always shows the 50 highest-risk active satellites (at most dataset.MAX_STARLINK Starlink)
 
 
 @st.cache_data
@@ -462,9 +462,10 @@ def go_to(section: str, **picks):
 weights = decay.DEFAULT_WEIGHTS  # fixed: not adjustable in the app
 scored = df.copy()
 scored["risk"] = decay.risk_score(components_df, weights)
-sats = scored[(scored["source"] == "active") & scored["leo"]]  # active LEO satellites only (not debris, not GEO/MEO)
-# the same 50 highest-risk active satellites everywhere (watchlist pool, tracker and screening pickers), highest risk first
-ids = sats.sort_values("risk", ascending=False).head(WATCHLIST_SIZE)["NORAD_CAT_ID"].astype(int).tolist()
+# active LEO satellites only (not debris, not GEO/MEO): the 50 highest-risk, at most 10 of them Starlink, highest risk first.
+# The same 50 everywhere (watchlist pool, tracker and screening pickers); red/yellow/green are ranked within them.
+sats = dataset.select_watchlist(scored[(scored["source"] == "active") & scored["leo"]], WATCHLIST_SIZE)
+ids = sats["NORAD_CAT_ID"].astype(int).tolist()
 default = 0
 
 # one section at a time: only the section on screen is built (a tab bar would build all three on every click)
@@ -481,7 +482,7 @@ def watchlist_view():
     c_mode, c_n = st.columns([3, 1])
     mode = sticky(c_mode.selectbox, "w_mode", "Rank by", ["Risk score: highest first", "Risk score: lowest first",
                                                           "Soonest estimated re-entry"],
-                  help="The watchlist draws on the 50 highest-risk active satellites; this orders them and the first "
+                  help="The watchlist draws on the 50 highest-risk active satellites (at most 10 of them Starlink); this orders them and the first "
                        "'Objects' of that order are shown.")
     n_show = sticky(c_n.number_input, "w_n", "Objects", min_value=10, max_value=WATCHLIST_SIZE, value=10, step=10,
                     help="How many to show: the first N of the 50 highest-risk satellites in the chosen order.")
@@ -499,7 +500,7 @@ def watchlist_view():
         return frame.sort_values("decay_days", na_position="last")  # soonest estimated re-entry
 
     # the pool is always the WATCHLIST_SIZE highest-risk satellites; the order option sorts them and Objects shows the first N
-    top = sort_by_mode(sats.sort_values("risk", ascending=False).head(WATCHLIST_SIZE)).head(int(n_show))
+    top = sort_by_mode(sats).head(int(n_show))
 
     levels = decay.traffic_light(sats["risk"]).loc[top.index]  # level = risk rank among the satellites, whatever is listed
     LEVEL_LABEL = {"red": "🔴 High", "yellow": "🟡 Medium", "green": "🟢 Low"}

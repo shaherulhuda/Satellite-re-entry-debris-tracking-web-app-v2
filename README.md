@@ -17,7 +17,7 @@ access code and `ASSISTANT_MAX_REQUESTS` (default 10) to cap questions per sessi
 
 ## Debris data and scope
 
-The app is **low Earth orbit only**: the Watchlist, Re-entry Tracker and Screen close approaches sections (and the assistant) cover **active satellites from `active.json` with mean altitude and perigee below 2,000 km**. Higher orbits (GEO/MEO) are never listed but still count as screening partners. The Re-entry Tracker and screening pickers list those same 50 highest-risk satellites. The Watchlist draws on them; the **Rank by** dropdown orders them and **Objects** shows the first N of that order (10 to 50).
+The app is **low Earth orbit only**: the Watchlist, Re-entry Tracker and Screen close approaches sections (and the assistant) cover **active satellites from `active.json` with mean altitude and perigee below 2,000 km**. Higher orbits (GEO/MEO) are never listed but still count as screening partners. The Re-entry Tracker and screening pickers list those same 50 highest-risk satellites. The Watchlist draws on them; the **Rank by** dropdown orders them and **Objects** shows the first N of that order (10 to 50). At most 10 of the 50 are Starlink (the highest-risk ones; Starlink is about two thirds of the active catalogue), set by `dataset.MAX_STARLINK`.
 Debris (`data/debris/`: Fengyun-1C, Iridium-33, Cosmos-2251; CelesTrak JSON or 3-line TLE, parsed by `debris.py`) is used in two ways:
 
 - **Orbital view:** the Watchlist globe can draw debris orbits (the **Debris** box; 0 = hidden).
@@ -48,10 +48,10 @@ Any extra `.tle` / `.json` file dropped into `data/debris/` is loaded as another
 The Watchlist risk score blends seven terms (weights adjustable in the app): perigee, estimated decay time, inclination, object
 type, and three close-approach terms: **miss distance**, **relative speed** and **time to closest approach**. The close-approach
 terms use each object's closest pass to any satellite or debris in the 24 hours after the snapshot time. The listed objects are
-coloured by overall risk rank: the 10 highest-risk active satellites are red, the next 30 yellow, all others green (so 50 listed satellites show 10 / 30 / 10, and a list of 10 is all red); debris is not on the watchlist.
+coloured by overall risk rank: the 10 highest-risk of the 50 listed satellites are red, the next 30 yellow, all others green (so 50 listed satellites show 10 / 30 / 10, and a list of 10 is all red); debris is not on the watchlist.
 
 Screening every object would be too slow for the web app, so `tools/compute_conjunctions.py` precomputes the closest approach for
-the highest-risk objects (default 300) into `data/closest_approaches.json`. Re-run it after `tools/refresh_data.py`.
+300 objects (default: the 150 highest-risk Starlink and the 150 highest-risk others, because the watchlist holds at most 10 Starlink) into `data/closest_approaches.json`. Re-run it after `tools/refresh_data.py`.
 
 
 ## Repository layout

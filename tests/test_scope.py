@@ -5,6 +5,7 @@ import re
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import pytest
 
 import dataset
@@ -63,10 +64,10 @@ def test_app_lists_and_pickers_are_satellites_only():
     assert not table["Name"].str.contains("DEB").any() and not set(table["Name"]) & deb_names
     # the table fits on screen: no NORAD ID, Type or With columns, and the risk bar is present
     assert not {"NORAD ID", "Type", "With"} & set(table.columns) and "Risk score" in table.columns
-    # pool = the 50 highest-risk active satellites (also what the watchlist draws on)
+    # pool = the 50 highest-risk active satellites, at most 10 of them Starlink (also what the watchlist draws on)
     full = dataset.attach_closest_approaches(cat, dataset.load_closest_approaches())
     full["risk"] = decay.risk_score(decay.risk_components(full))
-    pool = full[full.source == "active"].sort_values("risk", ascending=False).head(50).NORAD_CAT_ID.astype(int).tolist()
+    pool = dataset.select_watchlist(full[(full.source == "active") & full.leo]).NORAD_CAT_ID.astype(int).tolist()
     for section, label in ((SEC_TRACK, "Object"), (SEC_TRIAGE, "Object to screen")):  # only the section on screen is built
         other = open_app(400)
         other.session_state["section"] = section
@@ -343,3 +344,33 @@ def test_assistant_without_a_key_still_asks_for_one(monkeypatch):
     at = open_app(400).run()
     assert [t for t in at.text_input if t.label == "Anthropic API key"]
     assert [i for i in at.info if "AI features are off" in i.value]
+
+
+def test_watchlist_has_at_most_ten_starlink():
+    import decay
+    cat, _ = dataset.load_catalogue()
+    df = dataset.attach_closest_approaches(cat, dataset.load_closest_approaches())
+    df["risk"] = decay.risk_score(decay.risk_components(df), decay.DEFAULT_WEIGHTS)
+    sats = df[(df["source"] == "active") & df["leo"]]
+    sel = dataset.select_watchlist(sats)
+    assert len(sel) == 50
+    assert dataset.is_starlink(sel["OBJECT_NAME"]).sum() == dataset.MAX_STARLINK
+    assert sel["ca_screened"].all()  # every listed satellite has precomputed close-approach data
+    star = sel[dataset.is_starlink(sel["OBJECT_NAME"])]
+    other_star = sats[dataset.is_starlink(sats["OBJECT_NAME"]) & ~sats.index.isin(sel.index)]
+    assert star["risk"].min() >= other_star["risk"].max()  # the Starlink kept are the highest-risk ones
+    assert list(sel["risk"]) == sorted(sel["risk"], reverse=True)
+
+
+def test_select_watchlist_cap_on_small_data():
+    names = [f"STARLINK-{i}" for i in range(5)] + ["A", "B", "C"]
+    d = pd.DataFrame({"OBJECT_NAME": names, "risk": [90, 80, 70, 60, 50, 40, 30, 20]})
+    out = dataset.select_watchlist(d, size=5, max_starlink=2)
+    assert list(out["OBJECT_NAME"]) == ["STARLINK-0", "STARLINK-1", "A", "B", "C"]
+
+
+def test_app_lists_the_capped_set(monkeypatch):
+    at = open_app(400).run()
+    assert not at.exception
+    names = [d for d in at.dataframe[0].value["Name"]] if at.dataframe else []
+    assert names and sum(n.upper().startswith("STARLINK") for n in names) <= 10

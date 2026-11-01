@@ -14,6 +14,7 @@ import orbits
 
 CA_PATH = Path(__file__).with_name("data") / "closest_approaches.json"
 CA_COLUMNS = ["ca_miss_km", "ca_speed_km_s", "ca_hours", "ca_with"]
+MAX_STARLINK = 10  # the 50 listed satellites include at most this many Starlink (they are two thirds of the catalogue)
 LEO_MAX_KM = 2000.0  # low Earth orbit: mean altitude and perigee below 2,000 km
 
 
@@ -58,3 +59,22 @@ def attach_closest_approaches(cat: pd.DataFrame, ca: dict | None) -> pd.DataFram
     out.loc[idx, "ca_hours"] = sub["hours_to_ca"].to_numpy()
     out.loc[idx, "ca_with"] = sub["with_name"].to_numpy()
     return out
+
+
+def is_starlink(names: pd.Series) -> pd.Series:
+    return names.astype(str).str.upper().str.startswith("STARLINK")
+
+
+def select_watchlist(sats: pd.DataFrame, size: int = 50, max_starlink: int = MAX_STARLINK, by: str = "risk") -> pd.DataFrame:
+    """The `size` highest-ranked satellites by column `by`, with at most `max_starlink` of them Starlink (the highest ones)."""
+    ranked = sats.sort_values(by, ascending=False)
+    star = is_starlink(ranked["OBJECT_NAME"])
+    keep = ~star | (star.cumsum() <= max_starlink)
+    return ranked[keep].head(size)
+
+
+def balanced_shortlist(sats: pd.DataFrame, n: int, by: str) -> pd.DataFrame:
+    """n objects for screening: the top half Starlink and the top half everything else (Starlink would otherwise fill the list)."""
+    ranked = sats.sort_values(by, ascending=False)
+    star = is_starlink(ranked["OBJECT_NAME"])
+    return pd.concat([ranked[star].head(n // 2), ranked[~star].head(n - n // 2)]).sort_values(by, ascending=False)
