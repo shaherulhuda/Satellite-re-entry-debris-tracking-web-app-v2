@@ -73,6 +73,10 @@ iframe { border-radius: 14px; }
 .st-key-section [data-testid="stIconEmoji"] { font-size: 1.3rem; }
 @media (max-width: 640px) { .st-key-section { padding-right: 0; } .st-key-section [role="radiogroup"] { justify-content: flex-start; } }
 
+/* each re-entry chart is drawn twice (wide and phone layout); the media query shows one */
+[class*="st-key-chartp-"] { display: none; }
+@media (max-width: 640px) { [class*="st-key-chartw-"] { display: none; } [class*="st-key-chartp-"] { display: block; } }
+
 /* touch screens: charts and tables never trap a swipe, so the page keeps scrolling when a finger lands on one */
 @media (pointer: coarse) {
   .stPlotlyChart .js-plotly-plot, .stPlotlyChart .js-plotly-plot * { touch-action: pan-y !important; }
@@ -300,6 +304,14 @@ if not entered:
 
 SEC_WATCH, SEC_TRACK, SEC_TRIAGE = "🛰️ Watchlist", "📉 Re-entry Tracker", "⚠️ Screen close approaches"
 VIEW_ORBIT, VIEW_DECAY, VIEW_FOOT = "Orbit", "Decay", "Re-entry footprint"
+
+
+def both_sizes(name: str, make) -> None:
+    """Show a chart laid out for wide screens and again for phones; CSS (see _CSS) hides whichever does not fit."""
+    with st.container(key=f"chartw-{name}"):
+        st.plotly_chart(make(False), width="stretch")
+    with st.container(key=f"chartp-{name}"):
+        st.plotly_chart(make(True), width="stretch")
 
 
 @st.cache_data(ttl=300)
@@ -619,18 +631,18 @@ def tracker_view():
         h_obj = history.object_history(hist_all, int(norad))  # recorded perigees, drawn on the chart below
         st.caption(f"Status: **{row['decay_status']}**. This is a rough estimate (typically good to a factor of 2 or worse), "
                    "not a re-entry prediction; it cannot anticipate solar activity changes or manoeuvres.")
-        st.plotly_chart(charts.decay_figure(h0, float(row["decay_km_day"]), h_obj), width="stretch")
+        both_sizes("decay", lambda ph: charts.decay_figure(h0, float(row["decay_km_day"]), h_obj, phone=ph))
 
     else:
         f1, f2 = st.columns(2)
         f1.metric("Latitudes overflown", f"±{footprint.max_latitude(row['INCLINATION']):.1f}°")
         f2.metric("Share of Earth's surface", f"{footprint.surface_fraction(row['INCLINATION']) * 100:.0f}%")
-        st.plotly_chart(charts.footprint_figure(float(row["INCLINATION"])), width="stretch")
+        both_sizes("footprint", lambda ph: charts.footprint_figure(float(row["INCLINATION"]), phone=ph))
         if propagate_error is None:
             st.markdown("**Ground track** (next 3 orbits)")
-            st.plotly_chart(globe.ground_track_figure(track, pos), width="stretch")
+            both_sizes("track", lambda ph: globe.ground_track_figure(track, pos, phone=ph))
         st.caption("An object can only come down within the latitude band set by its inclination (red), and spends most of its time "
-                   "near the band's edges (right). Where it actually re-enters depends on the final orbits and cannot be "
+                   "near the band's edges (bar chart). Where it actually re-enters depends on the final orbits and cannot be "
                    "predicted days ahead; this shows where it *can* pass, not where it *will* land.")
 
 # ---------------------------------------------------------------- Triage desk

@@ -110,3 +110,13 @@ def test_conjunction_finds_known_separation_and_ignores_formation():
     assert "TWIN" in names and "FORMATION" not in names
     miss = ev[ev["name"] == "TWIN"]["miss_km"].min()
     assert 50 < miss < 70
+
+
+def test_phone_chart_layouts():
+    import charts, globe
+    wide = charts.footprint_figure(51.6)
+    phone = charts.footprint_figure(51.6, phone=True)
+    assert phone.layout.height != wide.layout.height and phone.layout.font.size == 11
+    assert charts.decay_figure(400, 0.5, phone=True).layout.height == 420
+    track = {"lon": [0, 10], "lat": [0, 5]}
+    assert globe.ground_track_figure(track, {"lon": 0, "lat": 0}, phone=True).layout.height == 330

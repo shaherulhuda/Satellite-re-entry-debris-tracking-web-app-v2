@@ -82,7 +82,7 @@ def float_on_dark(fig: go.Figure) -> go.Figure:
     return fig
 
 
-def ground_track_figure(track, pos, height: int = 460) -> go.Figure:
+def ground_track_figure(track, pos, height: int = 460, phone: bool = False) -> go.Figure:
     """2D ground track on the bundled coastlines (works offline)."""
     fig = go.Figure(coastline_trace_2d())
     fig.add_trace(go.Scatter(x=track["lon"], y=track["lat"], mode="lines", name="3-orbit ground track",
@@ -93,6 +93,11 @@ def ground_track_figure(track, pos, height: int = 460) -> go.Figure:
     fig.update_xaxes(range=[-180, 180], title="Longitude (°)", dtick=60)
     fig.update_yaxes(range=[-90, 90], title="Latitude (°)", dtick=30)
     fig.update_layout(height=height, margin=dict(l=0, r=0, t=10, b=0), legend=dict(orientation="h", y=-0.2))
+    if phone:  # the map is 2:1, so on a narrow screen it needs far less height; smaller type and a stacked legend
+        fig.update_xaxes(dtick=90)
+        fig.update_yaxes(dtick=45, title="Lat (°)")
+        fig.update_layout(height=330, margin=dict(l=0, r=4, t=10, b=0), font=dict(size=11),
+                          legend=dict(orientation="h", x=0, y=-0.32, yanchor="top"))
     return float_on_dark(fig)
 
 
