@@ -142,9 +142,9 @@ h4 { font-size: 1.2rem !important; }
 [data-testid="stStatusWidgetRunningIcon"]::before { content: ""; position: absolute; inset: 0.5rem; border-radius: 50%;
     background: radial-gradient(circle at 35% 30%, #5FE0C8, #14456B); }
 [data-testid="stStatusWidgetRunningIcon"]::after { content: ""; position: absolute; inset: 0; border-radius: 50%;
-    border: 1.5px solid rgba(79, 209, 224, .55); box-sizing: border-box; animation: orbisk-orbit 1.2s linear infinite;
+    border: 1.5px solid rgba(79, 209, 224, .55); box-sizing: border-box; animation: orbisk-status-orbit 1.2s linear infinite;
     background: radial-gradient(circle at 50% 0, #FF7A3D 0 2.6px, transparent 3.2px); }
-@keyframes orbisk-orbit { to { transform: rotate(360deg); } }
+@keyframes orbisk-status-orbit { to { transform: rotate(360deg); } }  /* own name: the cover's orbisk-orbit also translates */
 
 /* footer */
 .orbisk-footer { margin: 2.2rem 0 .6rem; padding-top: 1rem; border-top: 1px solid rgba(120, 200, 255, .18); text-align: center;
