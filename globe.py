@@ -144,7 +144,21 @@ _JS = """
     '<label><input type="checkbox" id="rot"' + (spin ? ' checked' : '') + '> Rotate view</label>' +
     (DEB ? '<label><input type="checkbox" id="deb" checked> Debris orbits (' + DEB.count + ')</label>' : '') +
     '<span id="clk" style="min-width:60px;opacity:.8"></span>';
-  document.body.appendChild(bar);
+  document.body.insertBefore(bar, document.body.firstChild);   // first in the page, so on phones it sits above the globe
+  // Phones: the controls wrap above the globe instead of floating over it, the globe is as tall as the screen is wide
+  // (capped), and the iframe shrinks to fit, so the whole globe is on screen without scrolling inside the frame.
+  const BAR_CSS = bar.style.cssText;
+  function fit() {
+    const w = window.innerWidth, narrow = w <= 640;
+    bar.style.cssText = narrow ? 'position:relative;z-index:10;display:flex;flex-wrap:wrap;align-items:center;' +
+      'gap:6px 10px;margin:6px;border-radius:16px;font-size:12px' : BAR_CSS;
+    const ph = narrow ? Math.round(Math.min(Math.max(w, 280), 460)) : D.height;
+    gd.style.height = ph + 'px';
+    Plotly.relayout(gd, {height: ph, width: w});
+    try { window.frameElement.style.height = (narrow ? bar.offsetHeight + 12 + ph : D.height) + 'px'; } catch (e) {}
+  }
+  fit();
+  window.addEventListener('resize', fit);
   const pp = bar.querySelector('#pp'), sel = bar.querySelector('#sp'), rot = bar.querySelector('#rot'),
         clk = bar.querySelector('#clk');
   pp.onclick = () => { playing = !playing; pp.textContent = playing ? '⏸ Pause' : '▶ Play'; last = null; };
@@ -322,7 +336,7 @@ def orbit_html(paths: list[dict], height: int = 650, highlight: bool = False, sp
                    camera=dict(eye=dict(x=eye[0], y=eye[1], z=eye[2]))))
     data = {
         "eye": eye, "spin": spin, "lineIdx": line_idx, "markIdx": mark_idx, "deb": deb_data, "ev": ev_data,
-        "autoplay": autoplay, "T": [round(float(p["period_s"]), 1) for p in paths],
+        "autoplay": autoplay, "height": height, "T": [round(float(p["period_s"]), 1) for p in paths],
     }
     js = _JS.replace("__DATA__", json.dumps(data, separators=(",", ":")))
     out = fig.to_html(full_html=True, include_plotlyjs=False, div_id="globe", post_script=js,

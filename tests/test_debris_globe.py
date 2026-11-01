@@ -107,3 +107,9 @@ def test_globe_animation_does_not_fight_dragging():
     assert "if (dragging) return;" in html            # the animation holds while the globe is dragged
     assert "Plotly.restyle(gd, upd, idx)" in html and "Plotly.update(gd, upd" not in html  # data-only updates, no layout work per frame
     assert "now - lastFrame < 33" in html and "lineDue" in html  # ~30 fps, orbit lines redrawn less often than the dots
+
+
+def test_globe_resizes_for_phones():
+    html = globe.orbit_html([{"name": "A", "x": [7000, 0, -7000, 0, 7000], "y": [0, 7000, 0, -7000, 0], "z": [0] * 5, "period_s": 5800}])
+    assert "window.innerWidth" in html and "frameElement.style.height" in html  # globe + iframe shrink to the screen width
+    assert "addEventListener('resize', fit)" in html
