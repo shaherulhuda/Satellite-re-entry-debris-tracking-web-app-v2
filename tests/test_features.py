@@ -120,3 +120,13 @@ def test_phone_chart_layouts():
     assert charts.decay_figure(400, 0.5, phone=True).layout.height == 420
     track = {"lon": [0, 10], "lat": [0, 5]}
     assert globe.ground_track_figure(track, {"lon": 0, "lat": 0}, phone=True).layout.height == 330
+
+
+def test_phone_charts_cannot_zoom_or_pan():
+    import charts, globe
+    track = {"lon": [0, 10], "lat": [0, 5]}
+    for fig in (charts.decay_figure(400, 0.5, phone=True), charts.footprint_figure(51.6, phone=True),
+                globe.ground_track_figure(track, {"lon": 0, "lat": 0}, phone=True)):
+        assert fig.layout.dragmode is False
+        assert all(a.fixedrange for a in fig.select_xaxes()) and all(a.fixedrange for a in fig.select_yaxes())
+    assert charts.footprint_figure(51.6).layout.dragmode is None  # wide layout keeps zoom/pan

@@ -7,7 +7,7 @@ from plotly.subplots import make_subplots
 
 import decay
 import footprint
-from globe import coastline_trace_2d, float_on_dark
+from globe import coastline_trace_2d, float_on_dark, lock_for_touch
 
 
 def decay_figure(h0_km: float, rate_km_day: float, hist=None, height: int = 360, phone: bool = False):
@@ -33,6 +33,7 @@ def decay_figure(h0_km: float, rate_km_day: float, hist=None, height: int = 360,
         fig.update_yaxes(title="Altitude (km)", title_standoff=6, automargin=True)
         fig.update_layout(height=420, margin=dict(l=0, r=4, t=10, b=0), font=dict(size=11),
                           legend=dict(orientation="h", x=0, y=-0.3, yanchor="top"))
+        lock_for_touch(fig)
     return float_on_dark(fig)
 
 
@@ -71,4 +72,4 @@ def _footprint_phone(phi, lat, p) -> go.Figure:
     fig.update_xaxes(range=[-90, 90], title="Latitude (°)", dtick=30, row=2, col=1)
     fig.update_yaxes(title="% of time", row=2, col=1)
     fig.update_layout(height=470, margin=dict(l=0, r=4, t=10, b=0), bargap=0.05, font=dict(size=11))
-    return float_on_dark(fig)
+    return float_on_dark(lock_for_touch(fig))

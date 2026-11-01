@@ -82,6 +82,14 @@ def float_on_dark(fig: go.Figure) -> go.Figure:
     return fig
 
 
+def lock_for_touch(fig: go.Figure) -> go.Figure:
+    """Phone charts do not zoom or pan: a finger sliding across one is scrolling the page, never dragging the plot."""
+    fig.update_layout(dragmode=False, hovermode="closest")
+    fig.update_xaxes(fixedrange=True)
+    fig.update_yaxes(fixedrange=True)
+    return fig
+
+
 def ground_track_figure(track, pos, height: int = 460, phone: bool = False) -> go.Figure:
     """2D ground track on the bundled coastlines (works offline)."""
     fig = go.Figure(coastline_trace_2d())
@@ -98,6 +106,7 @@ def ground_track_figure(track, pos, height: int = 460, phone: bool = False) -> g
         fig.update_yaxes(dtick=45, title="Lat (°)")
         fig.update_layout(height=330, margin=dict(l=0, r=4, t=10, b=0), font=dict(size=11),
                           legend=dict(orientation="h", x=0, y=-0.32, yanchor="top"))
+        lock_for_touch(fig)
     return float_on_dark(fig)
 
 

@@ -311,7 +311,7 @@ def both_sizes(name: str, make) -> None:
     with st.container(key=f"chartw-{name}"):
         st.plotly_chart(make(False), width="stretch")
     with st.container(key=f"chartp-{name}"):
-        st.plotly_chart(make(True), width="stretch")
+        st.plotly_chart(make(True), width="stretch", config={"scrollZoom": False, "displayModeBar": False, "doubleClick": False})
 
 
 @st.cache_data(ttl=300)
