@@ -73,6 +73,12 @@ iframe { border-radius: 14px; }
 .st-key-section [data-testid="stIconEmoji"] { font-size: 1.3rem; }
 @media (max-width: 640px) { .st-key-section { padding-right: 0; } .st-key-section [role="radiogroup"] { justify-content: flex-start; } }
 
+/* touch screens: charts and tables never trap a swipe, so the page keeps scrolling when a finger lands on one */
+@media (pointer: coarse) {
+  .stPlotlyChart .js-plotly-plot, .stPlotlyChart .js-plotly-plot * { touch-action: pan-y !important; }
+  [data-testid="stDataFrame"], [data-testid="stDataFrame"] * { touch-action: pan-y pan-x; overscroll-behavior: auto; }
+}
+
 /* scrollbars and tooltips */
 * { scrollbar-width: thin; scrollbar-color: rgba(79, 209, 224, .5) transparent; }
 ::-webkit-scrollbar { width: 10px; height: 10px; background: transparent; }

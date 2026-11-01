@@ -113,3 +113,8 @@ def test_globe_resizes_for_phones():
     html = globe.orbit_html([{"name": "A", "x": [7000, 0, -7000, 0, 7000], "y": [0, 7000, 0, -7000, 0], "z": [0] * 5, "period_s": 5800}])
     assert "window.innerWidth" in html and "frameElement.style.height" in html  # globe + iframe shrink to the screen width
     assert "addEventListener('resize', fit)" in html
+
+
+def test_globe_needs_a_tap_on_touch_screens():
+    html = globe.orbit_html([{"name": "A", "x": [7000, 0, -7000, 0, 7000], "y": [0, 7000, 0, -7000, 0], "z": [0] * 5, "period_s": 5800}])
+    assert "(pointer: coarse)" in html and "touch-action:pan-y" in html and "Tap to rotate and zoom" in html

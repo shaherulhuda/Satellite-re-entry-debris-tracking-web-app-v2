@@ -188,6 +188,32 @@ _JS = """
   gd.addEventListener('mouseleave', () => { active = false; });
   document.addEventListener('mouseleave', () => { active = false; });
 
+  // Touch screens: the globe never captures a swipe by accident. Until it is tapped, a swipe over it scrolls the page
+  // (touch-action pan-y); a tap switches rotate/pinch-zoom on, and it switches off again after a few idle seconds or a
+  // touch anywhere else on the page.
+  if (window.matchMedia('(pointer: coarse)').matches) {
+    const css = document.createElement('style');
+    css.textContent = '.js-plotly-plot,.js-plotly-plot *{touch-action:pan-y!important}' +
+      'body.live .js-plotly-plot,body.live .js-plotly-plot *{touch-action:none!important}';
+    document.head.appendChild(css);
+    gd.style.position = 'relative';
+    const shield = document.createElement('div');
+    shield.textContent = 'Tap to rotate and zoom';
+    shield.style.cssText = 'position:absolute;left:0;top:0;right:0;bottom:0;z-index:5;display:flex;align-items:flex-end;' +
+      'justify-content:center;padding-bottom:10px;font:12px sans-serif;color:#dde6f5;touch-action:pan-y';
+    gd.appendChild(shield);
+    let idle = null;
+    const live = (on) => {
+      document.body.classList.toggle('live', on); shield.style.display = on ? 'none' : 'flex'; clearTimeout(idle);
+      if (on) idle = setTimeout(() => live(false), 6000);
+    };
+    shield.addEventListener('click', () => live(true));
+    gd.addEventListener('pointerdown', () => { if (document.body.classList.contains('live')) live(true); });
+    gd.addEventListener('pointerup', () => { if (document.body.classList.contains('live')) live(true); });
+    try { window.parent.document.addEventListener('touchstart', (e) => { if (!gd.contains(e.target)) live(false); }, {passive: true}); } catch (e) {}
+    hint.style.display = 'none';
+  }
+
   let lastLine = -1e9, lastFrame = 0, dragging = false;
   function render(dt, forceLine) {
     const nowMs = performance.now();
