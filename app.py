@@ -829,7 +829,7 @@ def assistant_view():
 
                     guarded = ai_guarded
 
-                    t_chat, t_brief, t_risk, t_rec = st.tabs(["Ask the data", "Object briefing", "Risk explanation", "Recommended action"])
+                    t_chat, t_brief, t_risk, t_rec = st.tabs(["Ask", "Object briefing", "Risk explanation", "Recommended action"])
                     for tab, kind, task, button in ((t_brief, "brief", llm.BRIEFING_TASK, "Generate briefing"),
                                                     (t_risk, "risk", llm.RISK_TASK, "Explain risk score"),
                                                     (t_rec, "rec", llm.RECOMMEND_TASK, "Recommend next steps")):
