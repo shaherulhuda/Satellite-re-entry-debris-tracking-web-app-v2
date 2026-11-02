@@ -375,3 +375,10 @@ def test_app_lists_the_capped_set(monkeypatch):
     assert not at.exception
     names = [d for d in at.dataframe[0].value["Name"]] if at.dataframe else []
     assert names and sum(n.upper().startswith("STARLINK") for n in names) <= 10
+
+
+def test_assistant_has_no_example_text(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    at = open_app(400).run()
+    assert not at.exception
+    assert not [c for c in at.caption if c.value.startswith("Examples:")]

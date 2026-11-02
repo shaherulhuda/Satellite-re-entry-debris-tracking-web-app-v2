@@ -849,8 +849,6 @@ def assistant_view():
                                 st.json(facts)
 
                     with t_chat:
-                        st.caption("Examples: *Which red satellites have the closest approaches?* · *Why is STARLINK-1433 ranked so high?* · "
-                                   "*What should we do about the ISS?* · *How is the risk score calculated?*")
                         chat_hist = st.session_state.setdefault("ai_chat", [])
                         for m in chat_hist:
                             with st.chat_message(m["role"]):
