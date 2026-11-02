@@ -845,8 +845,6 @@ def assistant_view():
                             if saved and saved[0] == pick:
                                 st.markdown(saved[1][0])
                                 st.caption(f"{saved[1][1]['input_tokens']} input / {saved[1][1]['output_tokens']} output tokens")
-                            with st.expander("Facts sent to the model (computed by this app)"):
-                                st.json(facts)
 
                     with t_chat:
                         chat_hist = st.session_state.setdefault("ai_chat", [])

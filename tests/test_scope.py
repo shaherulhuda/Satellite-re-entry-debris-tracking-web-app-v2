@@ -382,3 +382,10 @@ def test_assistant_has_no_example_text(monkeypatch):
     at = open_app(400).run()
     assert not at.exception
     assert not [c for c in at.caption if c.value.startswith("Examples:")]
+
+
+def test_assistant_does_not_show_the_facts_expander(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    at = open_app(400).run()
+    assert not at.exception
+    assert not [e for e in at.expander if "Facts sent" in e.label]
