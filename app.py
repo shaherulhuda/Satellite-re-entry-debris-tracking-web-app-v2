@@ -823,7 +823,7 @@ def assistant_view():
                 if allowed:
                     max_req = int(_secret("ASSISTANT_MAX_REQUESTS") or ASSISTANT_DEFAULT_MAX)
                     used = st.session_state.setdefault("ai_requests", 0)
-                    model = st.selectbox("Model", list(llm.MODELS), format_func=llm.MODELS.get, key="ai_model")
+                    model = llm.DEFAULT_MODEL  # fixed: visitors do not choose the model
                     st.caption(f"{used}/{max_req} questions used in this session.")
                     ctx = llm.DataContext(df, records, components_df, weights, hist_all)
 

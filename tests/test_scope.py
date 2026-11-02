@@ -336,7 +336,8 @@ def test_assistant_with_a_configured_key_shows_no_key_box(monkeypatch):
     assert not [t for t in at.text_input if t.label == "Anthropic API key"]
     assert not [i for i in at.info if "AI features are off" in i.value]
     assert not [w for w in at.warning if "anyone with the link" in w.value]
-    assert at.selectbox(key="ai_model")  # the assistant itself is shown
+    assert not [b for b in at.selectbox if b.label == "Model"]  # visitors cannot change the model
+    assert [b for b in at.button if b.key and b.key.startswith("ai_suggest_")]  # the assistant itself is shown
 
 
 def test_assistant_without_a_key_still_asks_for_one(monkeypatch):
